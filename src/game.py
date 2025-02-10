@@ -24,6 +24,24 @@ class Position():
 
   def __sub__(self, other: object):
     return Position(self.q - other.q, self.r - other.r) if isinstance(other, Position) else NotImplemented
+  
+  def clockwise(self):
+    """
+    Rotate the position 60 degrees clockwise.
+
+    :return: New rotated position.
+    :rtype: Position
+    """
+    return Position(-self.r, self.q + self.r)
+
+  def anticlockwise(self):
+    """
+    Rotate the position 60 degrees anticlockwise.
+
+    :return: New rotated position.
+    :rtype: Position
+    """
+    return Position(self.q + self.r, -self.q)
 
 class Bug():
   """

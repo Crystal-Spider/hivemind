@@ -5,7 +5,7 @@ from copy import deepcopy
 from enums import Command, Option, OptionType, Strategy, PlayerColor
 from board import Board
 from game import Move
-from ai import Brain, Random, AlphaBetaPruner
+from ai.brain import Brain, Random, AlphaBetaPruner
 
 class Engine():
   """
@@ -296,7 +296,6 @@ class Engine():
     if self.is_active(self.board):
       try:
         self.board.play(move)
-        self.brains[self.board.current_player_color].empty_cache()
         print(self.board)
       except ValueError as e:
         self.error(e)
@@ -318,7 +317,6 @@ class Engine():
               raise ValueError(f"Expected a positive integer but got '{amount}'")
           else:
             self.board.undo()
-          self.brains[self.board.current_player_color].empty_cache()
           print(self.board)
         except ValueError as e:
           self.error(e)

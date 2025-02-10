@@ -17,8 +17,10 @@ class Brain(ABC):
 
   def __init__(self) -> None:
     self._cache: Optional[str] = None
+    self._last_max_depth: int = 0
+    self._last_time_limit: int = 0
+    self._last_turn: int = 0
 
-  @abstractmethod
   def calculate_best_move(self, board: Board, max_depth: int = 0, time_limit: int = 0) -> str:
     """
     Calculates the best move for the given board state, following the agent's policy.
@@ -32,8 +34,30 @@ class Brain(ABC):
     :return: Stringified best move.
     :rtype: str
     """
+    if not self._cache or self._last_turn != board.turn or self._last_max_depth != max_depth or self._last_time_limit != time_limit:
+      self._empty_cache()
+      self._last_max_depth = max_depth
+      self._last_time_limit = time_limit
+      self._last_turn = board.turn
+      self._cache = self._find_best_move(board, max_depth, time_limit)
+    return self._cache
 
-  def empty_cache(self) -> None:
+  @abstractmethod
+  def _find_best_move(self,  board: Board, max_depth: int = 0, time_limit: int = 0) -> str:
+    """
+    _summary_
+
+    :param board: _description_
+    :type board: Board
+    :param max_depth: _description_, defaults to 0
+    :type max_depth: int, optional
+    :param time_limit: _description_, defaults to 0
+    :type time_limit: int, optional
+    :return: _description_
+    :rtype: str
+    """
+
+  def _empty_cache(self) -> None:
     """
     Empties the current cache for the best move.  
     To be called OUTSIDE this class when needed.
@@ -45,21 +69,17 @@ class Random(Brain):
   Random acting AI agent.
   """
 
-  def calculate_best_move(self, board: Board, max_depth: int = 0, time_limit: int = 0) -> str:
-    if not self._cache:
-      self._cache = choice(board.valid_moves.split(";"))
+  def _find_best_move(self, board: Board, max_depth: int = 0, time_limit: int = 0) -> str:
     sleep(0.5)
-    return self._cache
+    return choice(board.valid_moves.split(";"))
 
 class AlphaBetaPruner(Brain):
   """
   AI agent following an alpha-beta pruning policy.
   """
 
-  def calculate_best_move(self, board: Board, max_depth: int = 0, time_limit: int = 0) -> str:
-    if not self._cache:
-      self._cache = self.abpruning(board, max_depth, time_limit)
-    return self._cache
+  def _find_best_move(self, board: Board, max_depth: int = 0, time_limit: int = 0) -> str:
+    return self.abpruning(board, max_depth, time_limit)
 
   def abpruning(self, root: Board, max_depth: int = 0, time_limit: int = 0) -> str:
     """
@@ -76,11 +96,12 @@ class AlphaBetaPruner(Brain):
     :rtype: str
     """
     start_time = time()
+    total_nodes = 0
 
     # Stack to simulate recursion
     stack: list[ABNode] = []
     # Each stack frame contains: (node, depth, alpha, beta, maximizing, child_iter, best_value, best_move)
-    stack.append((root, max_depth or float('inf'), float('-inf'), float('inf'), True, iter(self.gen_children(root)), float('-inf'), root.valid_moves.split(";")[0]))
+    stack.append((root, 0, float('-inf'), float('inf'), True, iter(self.gen_children(root)), float('-inf'), root.valid_moves.split(";")[0]))
 
     result: str = root.valid_moves.split(";")[0]
 
@@ -88,9 +109,11 @@ class AlphaBetaPruner(Brain):
       if time_limit and time() - start_time > time_limit:
         break
 
+      print(f"Stack size: {len(stack)}")
+      total_nodes += 1
       node, depth, alpha, beta, maximizing, child_iter, best_value, best_move = stack.pop()
 
-      if depth == 0 or node.gameover:
+      if depth >= (max_depth or float('inf')) or node.gameover:
         # Evaluate leaf or terminal node
         evaluation = self.evaluate(node)
         if stack:
@@ -107,7 +130,7 @@ class AlphaBetaPruner(Brain):
         # Push this node back onto the stack to continue processing later
         stack.append((node, depth, alpha, beta, maximizing, child_iter, best_value, best_move))
         # Push the child onto the stack for processing
-        stack.append((child, depth - 1, alpha, beta, not maximizing, iter(self.gen_children(child)), float('-inf') if not maximizing else float('inf'), move))
+        stack.append((child, depth + 1, alpha, beta, not maximizing, iter(self.gen_children(child)), float('-inf') if not maximizing else float('inf'), move))
       except StopIteration:
         # All children processed; finalize the value for this node
         if stack:
@@ -117,6 +140,7 @@ class AlphaBetaPruner(Brain):
           # If this is the root node, store the result
           result = best_move
 
+    print(f"Total nodes: {total_nodes}")
     return result
 
   def _update_parent(self, parent: ABNode, child_value: float, child_move: str) -> ABNode:
