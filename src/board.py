@@ -137,12 +137,12 @@ class Board():
             if self.turn == 0:
               if self._can_play_on_first_move(bug):
                 # Add the only valid placement for the current bug piece
-                moves.add(Move(bug, None, self.ORIGIN))
+                moves.add(Move(bug, None, Board.ORIGIN))
             # Turn 0 is Black player's first turn
             elif self.turn == 1:
               if self._can_play_on_first_move(bug):
                 # Add all valid placements for the current bug piece (can be placed only around the first White player's first piece)
-                moves.update(Move(bug, None, self._get_neighbor(self.ORIGIN, direction)) for direction in Direction.flat())
+                moves.update(Move(bug, None, self._get_neighbor(Board.ORIGIN, direction)) for direction in Direction.flat())
             # Bug piece has not been played yet
             elif not pos:
               # Check for hand placement and queen placement related rules.
@@ -668,7 +668,7 @@ class Board():
       bug_string_1, _, _, _, _, left_dir, bug_string_2, _, _, _, right_dir = match.groups()
       if not left_dir or not right_dir:
         moved = Bug.parse(bug_string_1)
-        if (relative_pos := self.pos_from_bug(Bug.parse(bug_string_2)) if bug_string_2 else self.ORIGIN):
+        if (relative_pos := self.pos_from_bug(Bug.parse(bug_string_2)) if bug_string_2 else Board.ORIGIN):
           move = Move(moved, self.pos_from_bug(moved), self._get_neighbor(relative_pos, Direction(f"{left_dir}|") if left_dir else Direction(f"|{right_dir or ""}")))
           if move in self.calculate_valid_moves_for_player(self.current_player_color):
             return move
@@ -699,13 +699,13 @@ class Board():
     :return: Neighboring position in the specified direction.
     :rtype: Position
     """
-    return position + self.NEIGHBOR_DELTAS[direction.delta_index]
+    return position + Board.NEIGHBOR_DELTAS[direction.delta_index]
 
   def _update_hash(self) -> None:
     self.hash.toggle_turn()
-    if len(self.moves) > 2 and (second_last_move := self.moves[-2]) is not None:
+    if len(self.moves) > 1 and (second_last_move := self.moves[-2]) is not None:
       self.hash.toggle_last_moved_piece(self._bugs.index(second_last_move.bug))
-    if len(self.moves) > 1 and (last_move := self.moves[-1]) is not None:
+    if len(self.moves) > 0 and (last_move := self.moves[-1]) is not None:
       self.hash.toggle_last_moved_piece(self._bugs.index(last_move.bug))
       if (origin := last_move.origin) is not None:
         self.hash.toggle_piece(self._bugs.index(last_move.bug), origin, len(self.bugs_from_pos(origin)))

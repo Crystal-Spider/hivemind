@@ -58,65 +58,6 @@ class ZobristHash:
     """
     return random.getrandbits(64)
 
-  def _canonical_offset(self, position: Position) -> Position:
-    """
-    Offset the position by the reference to get the canonical position.
-
-    :param position: Original position.
-    :type position: Position
-    :return: Position with the canonical offset.
-    :rtype: Position
-    """
-    return position - (self.references(ZobristHashReference.ORIGIN) or Position(0, 0))
-
-  def _canonical_orientation(self, position: Position) -> Position:
-    """
-    Rotate the position (which must be offset first) until the orientation is in the canonical quadrant.
-
-    :param position: Original position (with canonical offset)
-    :type position: Position
-    :return: Position with the canonical orientation.
-    :rtype: Position
-    """
-    orientation = self.references(ZobristHashReference.ORIENTATION)
-    rotated = position
-    print(f"orientation: {orientation}, rotated: {rotated}")
-    # If the orientation is None, there is no second piece on the board yet, so there is no orientation to consider.
-    # If the orientation is not None, rotate until the orientation moves into the "quadrant" where both q and r are positive (canonical orientation).
-    while orientation is not None and not (orientation.q > 0 and orientation.r >= 0):
-      orientation = orientation.anticlockwise()
-      rotated = rotated.anticlockwise()
-      print(f"orientation: {orientation}, rotated: {rotated}")
-    print(f"orientation: {orientation}, rotated: {rotated}")
-    return rotated
-  
-  def _canonical_position(self, position: Position) -> Position:
-    """
-    Transform the position into its canonical form.
-
-    :param position: Original position.
-    :type position: Position
-    :return: Canonical position.
-    :rtype: Position
-    """
-    return self._canonical_orientation(self._canonical_offset(position))
-
-  def _canonical_hash(self, piece_index: int, position: Position, stack: int) -> int:
-    """
-    Retrieves the canonical hash for the specified piece at the specified position and stack.
-
-    :param piece_index: Moved piece index.
-    :type piece_index: int
-    :param position: Moved piece position.
-    :type position: Position
-    :param stack: Moved piece elevation.
-    :type stack: int
-    :return: Canonical hash, offset and rotation invariant.
-    :rtype: int
-    """
-    canonical_position = self._canonical_position(position)
-    return self._hash_part_by_position[piece_index][canonical_position.q + self.board_size // 2][canonical_position.r + self.board_size // 2][stack]
-
   def toggle_piece(self, piece_index: int, position: Position, stack: int) -> None:
     """
     Toggles the hash part for the specified piece at the specified position and stack.
@@ -128,7 +69,7 @@ class ZobristHash:
     :param stack: Moved piece elevation.
     :type stack: int
     """
-    self.value ^= self._canonical_hash(piece_index, position, stack)
+    self.value ^= self._hash_part_by_position[piece_index][position.q + self.board_size // 2][position.r + self.board_size // 2][stack]
 
   def toggle_last_moved_piece(self, piece_index: int) -> None:
     """
