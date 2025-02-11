@@ -1,20 +1,6 @@
 import random
-from typing import Final, Callable, Optional
-from enum import StrEnum
+from typing import Final
 from core.game import Position
-
-class ZobristHashReference(StrEnum):
-  """
-  Reference points for the Zobrist Hash.
-  """
-  ORIGIN = "origin"
-  """
-  Position of the piece used as the invariant origin for the board.
-  """
-  ORIENTATION = "orientation"
-  """
-  Position of the piece used as the invariant for the board orientation.
-  """
 
 class ZobristHash:
   """
@@ -25,7 +11,7 @@ class ZobristHash:
   Hash value for an empty board.
   """
 
-  def __init__(self, num_pieces: int, board_size: int, board_stack_size: int, references: Callable[[ZobristHashReference], Optional[Position]]) -> None:
+  def __init__(self, num_pieces: int, board_size: int, board_stack_size: int) -> None:
     """
     Create a new Zobrist Hash instance invariant to offsets and 60° rotations.
 
@@ -35,14 +21,9 @@ class ZobristHash:
     :type board_size: int
     :param board_stack_size: How high a stack of pieces could ever get.
     :type board_stack_size: int
-    :param references:  
-      Function that must return the position of the specified reference piece.  
-      The reference position is allowed to be None, meaning the current state of the board is invariant to any transformation based on that reference.  
-      Explicitly: when ORIGIN is None, the board is invariant to offsets (is empty); when ORIENTATION is None, the board is invariant to rotations (has only one piece).
     :type reference: Callable[[ZobristHashReference], Optional[Position]]
     """
     self.value: int = self.EMPTY_BOARD
-    self.references: Callable[[ZobristHashReference], Optional[Position]] = references
     self.board_size: int = board_size
     self._hash_part_by_turn_color: int = ZobristHash.rand()
     self._hash_part_by_last_moved_piece: list[int] = [ZobristHash.rand() for _ in range(num_pieces)]

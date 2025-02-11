@@ -2,7 +2,7 @@ import re
 from typing import Final, Optional, Set
 from core.enums import GameType, GameState, PlayerColor, BugType, Direction
 from core.game import Position, Bug, Move
-from core.hash import ZobristHash, ZobristHashReference
+from core.hash import ZobristHash
 
 class Board():
   """
@@ -68,8 +68,7 @@ class Board():
         else:
           self._bug_to_pos[Bug(color, BugType(expansion.name))] = None
     self._bugs: Final[list[Bug]] = list(self._bug_to_pos.keys())
-    self._hash_refs: dict[ZobristHashReference, Optional[Bug]] = {ZobristHashReference.ORIGIN: None, ZobristHashReference.ORIENTATION: None}
-    self.hash: ZobristHash = ZobristHash(len(self._bug_to_pos), len(self._bug_to_pos), 5 + (GameType.M in self.type) * 2, lambda reference: self.pos_from_bug(self._hash_refs[reference]))
+    self.hash: ZobristHash = ZobristHash(len(self._bug_to_pos), len(self._bug_to_pos), 5 + (GameType.M in self.type) * 2)
     self._play_initial_moves(moves)
 
   def __str__(self) -> str:
@@ -206,10 +205,6 @@ class Board():
           self._pos_to_bug[move.destination].append(move.bug)
         else:
           self._pos_to_bug[move.destination] = [move.bug]
-        if self.turn == 1:
-          self._hash_refs[ZobristHashReference.ORIGIN] = move.bug
-        elif self.turn == 2:
-          self._hash_refs[ZobristHashReference.ORIENTATION] = move.bug
         black_queen_surrounded = self.count_queen_neighbors(PlayerColor.BLACK) == 6
         white_queen_surrounded = self.count_queen_neighbors(PlayerColor.WHITE) == 6
         if black_queen_surrounded and white_queen_surrounded:
@@ -237,12 +232,6 @@ class Board():
           self.state = GameState.IN_PROGRESS
         for _ in range(amount):
           self.turn -= 1
-          if self.turn == 0:
-            self.state = GameState.NOT_STARTED
-            self._hash_refs[ZobristHashReference.ORIGIN] = None
-            self._hash_refs[ZobristHashReference.ORIENTATION] = None
-          elif self.turn == 1:
-            self._hash_refs[ZobristHashReference.ORIENTATION] = None
           self._update_hash()
           self._valid_moves_cache[self.current_player_color] = None
           self.move_strings.pop()
@@ -252,6 +241,8 @@ class Board():
             self._bug_to_pos[move.bug] = move.origin
             if move.origin:
               self._pos_to_bug[move.origin].append(move.bug)
+      if self.turn == 0:
+        self.state = GameState.NOT_STARTED
       else:
         raise ValueError(f"Not enough moves to undo: asked for {amount} but only {len(self.moves)} were made")
     else:
