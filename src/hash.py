@@ -2,7 +2,6 @@ import random
 from typing import Final, Callable, Optional
 from enum import StrEnum
 from game import Position
-from board import Board
 
 class ZobristHashReference(StrEnum):
   """
@@ -45,12 +44,12 @@ class ZobristHash:
     self.value: int = self.EMPTY_BOARD
     self.references: Callable[[ZobristHashReference], Optional[Position]] = references
     self.board_size: int = board_size
-    self._hash_part_by_turn_color: int = ZobristHash.rand64()
-    self._hash_part_by_last_moved_piece: list[int] = [ZobristHash.rand64() for _ in range(num_pieces)]
-    self._hash_part_by_position = [[[[ZobristHash.rand64() for _ in range(board_stack_size)] for _ in range(board_size)] for _ in range(board_size)] for _ in range(num_pieces)]
+    self._hash_part_by_turn_color: int = ZobristHash.rand()
+    self._hash_part_by_last_moved_piece: list[int] = [ZobristHash.rand() for _ in range(num_pieces)]
+    self._hash_part_by_position = [[[[ZobristHash.rand() for _ in range(board_stack_size)] for _ in range(board_size)] for _ in range(board_size)] for _ in range(num_pieces)]
 
   @staticmethod
-  def rand64() -> int:
+  def rand() -> int:
     """
     Shortcut for `random.getrandbits(64)`.
 
@@ -68,7 +67,7 @@ class ZobristHash:
     :return: Position with the canonical offset.
     :rtype: Position
     """
-    return position - (self.references(ZobristHashReference.ORIGIN) or Board.ORIGIN)
+    return position - (self.references(ZobristHashReference.ORIGIN) or Position(0, 0))
 
   def _canonical_orientation(self, position: Position) -> Position:
     """
@@ -81,11 +80,14 @@ class ZobristHash:
     """
     orientation = self.references(ZobristHashReference.ORIENTATION)
     rotated = position
+    print(f"orientation: {orientation}, rotated: {rotated}")
     # If the orientation is None, there is no second piece on the board yet, so there is no orientation to consider.
     # If the orientation is not None, rotate until the orientation moves into the "quadrant" where both q and r are positive (canonical orientation).
-    while orientation is not None and not (orientation.q > 0 or orientation.r >= 0):
+    while orientation is not None and not (orientation.q > 0 and orientation.r >= 0):
       orientation = orientation.anticlockwise()
       rotated = rotated.anticlockwise()
+      print(f"orientation: {orientation}, rotated: {rotated}")
+    print(f"orientation: {orientation}, rotated: {rotated}")
     return rotated
   
   def _canonical_position(self, position: Position) -> Position:
@@ -106,9 +108,8 @@ class ZobristHash:
   def toggle_piece(self, piece_index: int, position: Position, stack: int) -> None:
     self.value ^= self._canonical_hash(piece_index, position, stack)
 
-  def toggle_last_moved_piece(self, piece_index: int | None) -> None:
-    if piece_index is not None:
-      self.value ^= self._hash_part_by_last_moved_piece[piece_index]
+  def toggle_last_moved_piece(self, piece_index: int) -> None:
+    self.value ^= self._hash_part_by_last_moved_piece[piece_index]
 
   def toggle_turn(self) -> None:
     self.value ^= self._hash_part_by_turn_color
