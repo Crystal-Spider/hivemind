@@ -3,7 +3,7 @@ from random import choice
 from time import sleep, time
 from copy import deepcopy
 from abc import ABC, abstractmethod
-from board import Board
+from core.board import Board
 
 type ABNode = tuple[Board, float, float, float, bool, Iterator[tuple[Board, str]], float, str]
 """

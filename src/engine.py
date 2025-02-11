@@ -2,9 +2,9 @@ import os
 import re
 from typing import TypeGuard, Final, Optional, Any
 from copy import deepcopy
-from enums import Command, Option, OptionType, Strategy, PlayerColor
-from board import Board
-from game import Move
+from core.enums import Command, Option, OptionType, Strategy, PlayerColor
+from core.board import Board
+from core.game import Move
 from ai.brain import Brain, Random, AlphaBetaPruner
 
 class Engine():

@@ -1,8 +1,8 @@
 import re
 from typing import Final, Optional, Set
-from enums import GameType, GameState, PlayerColor, BugType, Direction
-from game import Position, Bug, Move
-from hash import ZobristHash, ZobristHashReference
+from core.enums import GameType, GameState, PlayerColor, BugType, Direction
+from core.game import Position, Bug, Move
+from core.hash import ZobristHash, ZobristHashReference
 
 class Board():
   """

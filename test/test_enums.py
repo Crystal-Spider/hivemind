@@ -1,5 +1,5 @@
 import pytest
-from enums import PlayerColor, GameState, GameType, Direction
+from core.enums import PlayerColor, GameState, GameType, Direction
 
 class TestPlayerColor():
   def test_code(self):

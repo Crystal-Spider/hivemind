@@ -1,7 +1,7 @@
 import random
 from typing import Final, Callable, Optional
 from enum import StrEnum
-from game import Position
+from core.game import Position
 
 class ZobristHashReference(StrEnum):
   """

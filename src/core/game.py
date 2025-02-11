@@ -1,6 +1,6 @@
 import re
 from typing import Final, Optional
-from enums import PlayerColor, BugType, Direction
+from core.enums import PlayerColor, BugType, Direction
 
 class Position():
   """
