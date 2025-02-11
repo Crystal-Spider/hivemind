@@ -102,14 +102,45 @@ class ZobristHash:
     return self._canonical_orientation(self._canonical_offset(position))
 
   def _canonical_hash(self, piece_index: int, position: Position, stack: int) -> int:
+    """
+    Retrieves the canonical hash for the specified piece at the specified position and stack.
+
+    :param piece_index: Moved piece index.
+    :type piece_index: int
+    :param position: Moved piece position.
+    :type position: Position
+    :param stack: Moved piece elevation.
+    :type stack: int
+    :return: Canonical hash, offset and rotation invariant.
+    :rtype: int
+    """
     canonical_position = self._canonical_position(position)
     return self._hash_part_by_position[piece_index][canonical_position.q + self.board_size // 2][canonical_position.r + self.board_size // 2][stack]
 
   def toggle_piece(self, piece_index: int, position: Position, stack: int) -> None:
+    """
+    Toggles the hash part for the specified piece at the specified position and stack.
+
+    :param piece_index: Moved piece index.
+    :type piece_index: int
+    :param position: Moved piece position.
+    :type position: Position
+    :param stack: Moved piece elevation.
+    :type stack: int
+    """
     self.value ^= self._canonical_hash(piece_index, position, stack)
 
   def toggle_last_moved_piece(self, piece_index: int) -> None:
+    """
+    Toggles the hash part for the last moved piece, specified by its index.
+
+    :param piece_index: Moved piece index.
+    :type piece_index: int
+    """
     self.value ^= self._hash_part_by_last_moved_piece[piece_index]
 
   def toggle_turn(self) -> None:
+    """
+    Toggles the hash part for the turn color.
+    """
     self.value ^= self._hash_part_by_turn_color
