@@ -2,42 +2,47 @@ import random
 from typing import Final
 from core.game import Position
 
+_MAX_PIECES: Final[int] = 28
+_BOARD_PAD_SIZE: Final[int] = 2
+_MAX_BOARD_SIZE: Final[int] = (_MAX_PIECES + (_BOARD_PAD_SIZE * 2)) * 2 + 1
+"""
+Board size is at most as long as all pieces side by side.  
+However, the hive is not necessarily centered with respect to the board origin (`Position(0, 0)`).  
+To account for possible shifts, the board size is padded, with 1 extra cell to define a proper center.  
+However, pieces might be placed all on one side, so we double the size (along with the padding).  
+The pad size is small because, especially since the board size is doubled, it's very unlikely that a piece will actually get further than 32 tiles from the origin.
+
+Another possible solution, safer but less efficient, would be to use a dynamic hash map for the board hashes rather than a fixed-size matrix.  
+A smaller (e.g., 16x16) map could be initialized in the same way, and then progressively generate new hashes for new positions beyond the initial generation.
+
+Lastly, the best solution would be to have a fixed-size matrix, but an efficient way to compute an hash invariant to offsets.
+"""
+_MAX_STACK_SIZE: Final[int] = 7
+_HASH_SIZE: Final[int] = 64
+
+def _rand() -> int:
+  """
+  Shortcut for `random.getrandbits(64)`.
+
+  :return: Random 64-bit integer.
+  :rtype: int
+  """
+  return random.getrandbits(_HASH_SIZE)
+
 class ZobristHash:
   """
   Zobrist Hash invariant to offsets and 60° rotations.
   """
-  EMPTY_BOARD: Final[int] = 0
-  """
-  Hash value for an empty board.
-  """
+  random.seed(42)
+  _HASH_PART_BY_TURN_COLOR: Final[int] = _rand()
+  _HASH_PART_BY_LAST_MOVED_PIECE: Final[list[int]] = [_rand() for _ in range(_MAX_PIECES)]
+  _HASH_PART_BY_POSITION: Final[list[list[list[list[int]]]]] = [[[[_rand() for _ in range(_MAX_STACK_SIZE)] for _ in range(_MAX_BOARD_SIZE)] for _ in range(_MAX_BOARD_SIZE)] for _ in range(_MAX_PIECES)]
 
-  def __init__(self, num_pieces: int, board_size: int, board_stack_size: int) -> None:
+  def __init__(self) -> None:
     """
-    Create a new Zobrist Hash instance invariant to offsets and 60° rotations.
-
-    :param num_pieces: How many pieces are there in the game.
-    :type num_pieces: int
-    :param board_size: How big the board could ever get.
-    :type board_size: int
-    :param board_stack_size: How high a stack of pieces could ever get.
-    :type board_stack_size: int
-    :type reference: Callable[[ZobristHashReference], Optional[Position]]
+    Create a new Zobrist Hash instance.
     """
-    self.value: int = self.EMPTY_BOARD
-    self.board_size: int = board_size
-    self._hash_part_by_turn_color: int = ZobristHash.rand()
-    self._hash_part_by_last_moved_piece: list[int] = [ZobristHash.rand() for _ in range(num_pieces)]
-    self._hash_part_by_position = [[[[ZobristHash.rand() for _ in range(board_stack_size)] for _ in range(board_size)] for _ in range(board_size)] for _ in range(num_pieces)]
-
-  @staticmethod
-  def rand() -> int:
-    """
-    Shortcut for `random.getrandbits(64)`.
-
-    :return: Random 64-bit integer.
-    :rtype: int
-    """
-    return random.getrandbits(64)
+    self.value: int = 0
 
   def toggle_piece(self, piece_index: int, position: Position, stack: int) -> None:
     """
@@ -50,7 +55,7 @@ class ZobristHash:
     :param stack: Moved piece elevation.
     :type stack: int
     """
-    self.value ^= self._hash_part_by_position[piece_index][position.q + self.board_size // 2][position.r + self.board_size // 2][stack]
+    self.value ^= ZobristHash._HASH_PART_BY_POSITION[piece_index][position.q + _MAX_BOARD_SIZE // 2][position.r + _MAX_BOARD_SIZE // 2][stack]
 
   def toggle_last_moved_piece(self, piece_index: int) -> None:
     """
@@ -59,10 +64,10 @@ class ZobristHash:
     :param piece_index: Moved piece index.
     :type piece_index: int
     """
-    self.value ^= self._hash_part_by_last_moved_piece[piece_index]
+    self.value ^= ZobristHash._HASH_PART_BY_LAST_MOVED_PIECE[piece_index]
 
   def toggle_turn(self) -> None:
     """
     Toggles the hash part for the turn color.
     """
-    self.value ^= self._hash_part_by_turn_color
+    self.value ^= ZobristHash._HASH_PART_BY_TURN_COLOR

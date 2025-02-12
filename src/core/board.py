@@ -68,7 +68,7 @@ class Board():
         else:
           self._bug_to_pos[Bug(color, BugType(expansion.name))] = None
     self._bugs: Final[list[Bug]] = list(self._bug_to_pos.keys())
-    self.hash: ZobristHash = ZobristHash(len(self._bug_to_pos), len(self._bug_to_pos), 5 + (GameType.M in self.type) * 2)
+    self._hash: ZobristHash = ZobristHash()
     self._play_initial_moves(moves)
 
   def __str__(self) -> str:
@@ -329,6 +329,15 @@ class Board():
     :rtype: Optional[Position]
     """
     return self._bug_to_pos[bug] if bug in self._bug_to_pos else None
+
+  def hash(self) -> int:
+    """
+    Returns the current Zobrist Hash value.
+
+    :return: Zobrist Hash value.
+    :rtype: int
+    """
+    return self._hash.value
 
   def _parse_turn(self, turn: str) -> int:
     """
@@ -693,11 +702,11 @@ class Board():
     return position + Board.NEIGHBOR_DELTAS[direction.delta_index]
 
   def _update_hash(self) -> None:
-    self.hash.toggle_turn()
+    self._hash.toggle_turn()
     if len(self.moves) > 1 and (second_last_move := self.moves[-2]) is not None:
-      self.hash.toggle_last_moved_piece(self._bugs.index(second_last_move.bug))
+      self._hash.toggle_last_moved_piece(self._bugs.index(second_last_move.bug))
     if len(self.moves) > 0 and (last_move := self.moves[-1]) is not None:
-      self.hash.toggle_last_moved_piece(self._bugs.index(last_move.bug))
+      self._hash.toggle_last_moved_piece(self._bugs.index(last_move.bug))
       if (origin := last_move.origin) is not None:
-        self.hash.toggle_piece(self._bugs.index(last_move.bug), origin, len(self.bugs_from_pos(origin)))
-      self.hash.toggle_piece(self._bugs.index(last_move.bug), last_move.destination, len(self.bugs_from_pos(last_move.destination)) - 1)
+        self._hash.toggle_piece(self._bugs.index(last_move.bug), origin, len(self.bugs_from_pos(origin)))
+      self._hash.toggle_piece(self._bugs.index(last_move.bug), last_move.destination, len(self.bugs_from_pos(last_move.destination)) - 1)
