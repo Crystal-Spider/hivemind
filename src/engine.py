@@ -12,7 +12,7 @@ class Engine():
   Game engine.
   """
 
-  VERSION: Final[str] = "1.3.0"
+  VERSION: Final[str] = "1.4.0"
   """
   Engine version.
   """
@@ -295,9 +295,9 @@ class Engine():
     """
     if self.is_active(self.board):
       if restriction == "time" and re.fullmatch(r"[0-9]{2}:[0-5][0-9]:[0-5][0-9]", value):
-        print(self.brains[self.board.current_player_color].calculate_best_move(deepcopy(self.board), self.maxbranchingfactor, time_limit=sum(factor * int(time) for factor, time in zip([3600, 60, 1], value.split(':')))))
+        print(self.brains[self.board.current_player_color].find_best_move(deepcopy(self.board), self.maxbranchingfactor, time_limit=sum(factor * int(time) for factor, time in zip([3600, 60, 1], value.split(':')))))
       elif restriction == "depth" and value.isdigit() and (max_depth := int(value)) > 0:
-        print(self.brains[self.board.current_player_color].calculate_best_move(deepcopy(self.board), self.maxbranchingfactor, max_depth=max_depth))
+        print(self.brains[self.board.current_player_color].find_best_move(deepcopy(self.board), self.maxbranchingfactor, max_depth=max_depth))
       else:
         self.error(f"Invalid arguments for command '{Command.BESTMOVE}'")
 
