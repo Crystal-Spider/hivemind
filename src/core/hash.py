@@ -17,6 +17,7 @@ A smaller (e.g., 16x16) map could be initialized in the same way, and then progr
 
 Lastly, the best solution would be to have a fixed-size matrix, but an efficient way to compute an hash invariant to offsets.
 """
+_HALVED_BOARD_SIZE: Final[int] = _MAX_BOARD_SIZE // 2
 _MAX_STACK_SIZE: Final[int] = 7
 _HASH_SIZE: Final[int] = 64
 
@@ -55,7 +56,7 @@ class ZobristHash:
     :param stack: Moved piece elevation.
     :type stack: int
     """
-    self.value ^= ZobristHash._HASH_PART_BY_POSITION[piece_index][position.q + _MAX_BOARD_SIZE // 2][position.r + _MAX_BOARD_SIZE // 2][stack]
+    self.value ^= ZobristHash._HASH_PART_BY_POSITION[piece_index][position.q + _HALVED_BOARD_SIZE][position.r + _HALVED_BOARD_SIZE][stack]
 
   def toggle_last_moved_piece(self, piece_index: int) -> None:
     """
