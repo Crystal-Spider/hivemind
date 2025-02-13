@@ -241,8 +241,8 @@ class Board():
             self._bug_to_pos[move.bug] = move.origin
             if move.origin:
               self._pos_to_bug[move.origin].append(move.bug)
-      if self.turn == 0:
-        self.state = GameState.NOT_STARTED
+        if self.turn == 0:
+          self.state = GameState.NOT_STARTED
       else:
         raise ValueError(f"Not enough moves to undo: asked for {amount} but only {len(self.moves)} were made")
     else:
