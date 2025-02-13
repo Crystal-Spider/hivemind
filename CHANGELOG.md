@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Nothing new.
 
+## [v1.3.0] - 2025/02/13
+
+- Drastically improve minmax agent.
+- Major code changes:
+  * Implemented Zobrist Hash for board states.
+  * Moved almost all files.
+- Minor refractors or improvements.
+
 ## [v1.2.0] - 2024/11/29
 
 - Add Minmax with alpha-beta pruning agent.
@@ -38,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 [Unreleased]: https://github.com/crystal-spider/hivemind
 [README]: https://github.com/crystal-spider/hivemind#readme
 
+[v1.3.0]: https://github.com/crystal-spider/hivemind/releases?q=1.3.0
 [v1.2.0]: https://github.com/crystal-spider/hivemind/releases?q=1.2.0
 [v1.1.0]: https://github.com/crystal-spider/hivemind/releases?q=1.1.0
 [v1.0.0]: https://github.com/crystal-spider/hivemind/releases?q=1.0.0
