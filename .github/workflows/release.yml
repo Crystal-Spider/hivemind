@@ -23,6 +23,10 @@ jobs:
     secrets: inherit
 
   release:
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -47,8 +51,6 @@ jobs:
         run: pyinstaller src/engine.py --name HivemindEngine --noconsole --onefile
 
       - name: Create Release
-        permissions:
-          contents: write
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.event.inputs.version }}
