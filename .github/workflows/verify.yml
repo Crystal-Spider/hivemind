@@ -1,0 +1,22 @@
+name: Static Analysis Workflow
+
+on:
+  workflow_dispatch:
+
+  test:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.7'
+          cache: 'pip'
+        run: pip install -r requirements.txt
+
+      - name: Static Analysis
+        run: prospector src
