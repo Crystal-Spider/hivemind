@@ -9,7 +9,7 @@ on:
         required: true
 
 jobs:
-  version_update:
+  version-update:
     runs-on: ubuntu-latest
     permissions:
       contents: write
