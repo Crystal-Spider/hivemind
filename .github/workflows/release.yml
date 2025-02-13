@@ -67,11 +67,19 @@ jobs:
       - name: Build Release Artifact
         run: pyinstaller src/engine.py --name HivemindEngine --noconsole --onefile
 
+      - name: Set Release Body
+        id: release_body
+        run: |
+          VERSION_DASHED=$(echo ${{ github.event.inputs.version }} | tr '.' '-')
+          DEFAULT_BRANCH=$(git remote show origin | awk '/HEAD branch/ {print $NF}')
+          BODY="See [Changelog](https://github.com/${{ github.repository }}/blob/${DEFAULT_BRANCH}/CHANGELOG.md#v${VERSION_DASHED}-$(date +%Y%m%d))."
+          echo "body=$BODY" >> $GITHUB_ENV
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.event.inputs.version }}
-          body: See [Changelog](https://github.com/Crystal-Spider/hivemind/blob/main/CHANGELOG.md#).
+          body: "${{ env.body }}"
           files: dist/HivemindEngine*
           fail_on_unmatched_files: true
           draft: true # TODO: Change, it's only for testing.
@@ -85,4 +93,3 @@ jobs:
       id-token: write
     uses: ./.github/workflows/docs.yml
     secrets: inherit
-
