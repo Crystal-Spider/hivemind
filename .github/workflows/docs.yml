@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  deploy:
     permissions:
       contents: write
       pages: write

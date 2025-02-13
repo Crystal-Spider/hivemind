@@ -70,9 +70,9 @@ jobs:
       - name: Set Release Body
         id: release_body
         run: |
-          VERSION_DASHED=$(echo ${{ github.event.inputs.version }} | tr '.' '-')
+          VERSION_NO_SPACES=$(echo ${{ github.event.inputs.version }} | tr '.' '')
           DEFAULT_BRANCH=$(git remote show origin | awk '/HEAD branch/ {print $NF}')
-          BODY="See [Changelog](https://github.com/${{ github.repository }}/blob/${DEFAULT_BRANCH}/CHANGELOG.md#v${VERSION_DASHED}-$(date +%Y%m%d))."
+          BODY="See [Changelog](https://github.com/${{ github.repository }}/blob/${DEFAULT_BRANCH}/CHANGELOG.md#v${VERSION_NO_SPACES}---$(date +%Y%m%d))."
           echo "body=$BODY" >> $GITHUB_ENV
 
       - name: Create Release
@@ -82,7 +82,7 @@ jobs:
           body: "${{ env.body }}"
           files: dist/HivemindEngine*
           fail_on_unmatched_files: true
-          draft: true # TODO: Change, it's only for testing.
+          draft: false
           prerelease: false
 
   docs:

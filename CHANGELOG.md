@@ -9,13 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Nothing new.
 
-## [v1.4.0] - 2025/02/dd
+## [v1.4.0] - 2025/02/13
 
 - Drastically improved board evaluation for minmax agents.
 - Added `MaxBranchingFactor` engine option, to limit the amount of moves a minmax agent can expand from a single node.
 - Added a print of some metrics when searching for the best move with minmax agents.
 - Fix best move search with minmax agents when undos are performed.
 - Fix best move search with minmax agents when new games are started.
+- Implement workflows for release and testing.
 
 ## [v1.3.0] - 2025/02/13
 
