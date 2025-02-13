@@ -31,7 +31,7 @@ class Board():
     """
     Game Board instantation.
 
-    :param gamestring: GameString, defaults to "".
+    :param gamestring: GameString, defaults to `""`.
     :type gamestring: str, optional
     """
     game_type, state, turn, moves = self._parse_gamestring(gamestring)
@@ -222,7 +222,7 @@ class Board():
     """
     Undoes the specified amount of moves.
 
-    :param amount: Amount of moves to undo, defaults to 1.
+    :param amount: Amount of moves to undo, defaults to `1`.
     :type amount: int, optional
     :raises ValueError: If there are not enough moves to undo.
     :raises ValueError: If the game has yet to begin.
@@ -426,7 +426,7 @@ class Board():
     :type bug: Bug
     :param origin: Initial position of the bug piece.
     :type origin: Position
-    :param depth: Optional fixed depth of the move, defaults to 0.
+    :param depth: Optional fixed depth of the move, defaults to `0`.
     :type depth: int, optional
     :return: Set of valid sliding moves.
     :rtype: Set[Move]
@@ -456,7 +456,7 @@ class Board():
     :type bug: Bug
     :param origin: Initial position of the bug piece.
     :type origin: Position
-    :param virtual: Whether the bug is not at origin, and is just passing by as part of its full move, defaults to False.
+    :param virtual: Whether the bug is not at origin, and is just passing by as part of its full move, defaults to `False`.
     :type virtual: bool, optional
     :return: Set of valid Beetle moves.
     :rtype: Set[Move]
@@ -506,7 +506,7 @@ class Board():
     :type bug: Bug
     :param origin: Initial position of the bug piece.
     :type origin: Position
-    :param special_only: Whether to include special moves only, defaults to False.
+    :param special_only: Whether to include special moves only, defaults to `False`.
     :type special_only: bool, optional
     :return: Set of valid Mosquito moves.
     :rtype: Set[Move]

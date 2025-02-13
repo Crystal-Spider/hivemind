@@ -109,9 +109,9 @@ class Move():
 
     :param moved: Bug piece moved.
     :type moved: Bug
-    :param relative: Bug piece relative to which the other bug piece is moved, defaults to None.
+    :param relative: Bug piece relative to which the other bug piece is moved, defaults to `None`.
     :type relative: Optional[Bug], optional
-    :param direction: Direction of the destination tile with respect to the relative bug piece, defaults to None.
+    :param direction: Direction of the destination tile with respect to the relative bug piece, defaults to `None`.
     :type direction: Optional[Direction], optional
     :return: MoveString.
     :rtype: str

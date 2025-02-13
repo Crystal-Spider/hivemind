@@ -40,9 +40,6 @@ class ZobristHash:
   _HASH_PART_BY_POSITION: Final[list[list[list[list[int]]]]] = [[[[_rand() for _ in range(_MAX_STACK_SIZE)] for _ in range(_MAX_BOARD_SIZE)] for _ in range(_MAX_BOARD_SIZE)] for _ in range(_MAX_PIECES)]
 
   def __init__(self) -> None:
-    """
-    Create a new Zobrist Hash instance.
-    """
     self.value: int = 0
 
   def toggle_piece(self, piece_index: int, position: Position, stack: int) -> None:
