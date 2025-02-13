@@ -22,19 +22,22 @@ jobs:
       disable_checks: ${{ github.event.inputs.disable_checks }}
     secrets: inherit
 
-  version-update:
+  verify:
+    needs: version-validation
     permissions:
       contents: read
     uses: ./.github/workflows/verify.yml
     secrets: inherit
 
-  version-update:
+  test:
+    needs: verify
     permissions:
       contents: read
     uses: ./.github/workflows/test.yml
     secrets: inherit
 
   version-update:
+    needs: test
     permissions:
       contents: write
     uses: ./.github/workflows/version_update.yml
@@ -43,7 +46,7 @@ jobs:
     secrets: inherit
 
   release:
-    needs: version-validation
+    needs: version-update
     permissions:
       contents: read
       pages: write

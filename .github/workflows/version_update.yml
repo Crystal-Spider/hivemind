@@ -1,4 +1,5 @@
-name: Version Update
+name: Version Update Workflow
+
 on:
   workflow_call:  
     inputs:

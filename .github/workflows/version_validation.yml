@@ -1,4 +1,4 @@
-name: Version Validation
+name: Version Validation Workflow
 
 on:
   workflow_call:
