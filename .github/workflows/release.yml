@@ -61,7 +61,7 @@ jobs:
         with:
           python-version: '3.12.7'
           cache: 'pip'
-        run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt
 
       - name: Build Release Artifact
         run: pyinstaller src/engine.py --name HivemindEngine --noconsole --onefile
