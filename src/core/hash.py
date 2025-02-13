@@ -1,6 +1,7 @@
 import random
 from typing import Final
 from core.game import Position
+from core.enums import GameType
 
 _MAX_PIECES: Final[int] = 28
 _BOARD_PAD_SIZE: Final[int] = 2
@@ -32,15 +33,16 @@ def _rand() -> int:
 
 class ZobristHash:
   """
-  Zobrist Hash invariant to offsets and 60° rotations.
+  Zobrist Hash.
   """
   random.seed(42)
   _HASH_PART_BY_TURN_COLOR: Final[int] = _rand()
+  _HASH_PART_BY_GAME_TYPE: Final[list[int]] = [0] + [_rand() for _ in range(2 ** (len(GameType) - 1) + 1)]
   _HASH_PART_BY_LAST_MOVED_PIECE: Final[list[int]] = [_rand() for _ in range(_MAX_PIECES)]
   _HASH_PART_BY_POSITION: Final[list[list[list[list[int]]]]] = [[[[_rand() for _ in range(_MAX_STACK_SIZE)] for _ in range(_MAX_BOARD_SIZE)] for _ in range(_MAX_BOARD_SIZE)] for _ in range(_MAX_PIECES)]
 
-  def __init__(self) -> None:
-    self.value: int = 0
+  def __init__(self, game_type: GameType) -> None:
+    self.value: int = 0 ^ ZobristHash._HASH_PART_BY_GAME_TYPE[game_type.index]
 
   def toggle_piece(self, piece_index: int, position: Position, stack: int) -> None:
     """

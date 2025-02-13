@@ -80,17 +80,6 @@ class AlphaBetaPruner(Brain):
   AI agent following an alpha-beta pruning policy.
   """
 
-  def _empty_cache(self) -> None:
-    super()._empty_cache()
-    # TODO: Implement clearing cache for a new game (if different GameType).
-    # Idea:
-    #   Store the previous game type and clear the cache if it changes.
-    #   If it does not change, treat the new game as if an undo of everything was performed.
-
-    # Play a move, find bestmove depth 2. Start a new game with the same gametype. Play the same move as in the last game. Find bestmove depth 2, and correctly it returns the same as before.
-    # Play a move, find bestmove depth 2. Start a new game with the same gametype. Play a different one than in the last game. Find bestmove depth 2, and wrongly it returns the same as before.
-    # Play a move, find bestmove depth 2. Start a new game with a different gametype. Play any move. Find bestmove depth 2, and wrongly it returns the same as before.
-
   def __init__(self) -> None:
     super().__init__()
     self._transpos_table: TranspositionTable = TranspositionTable()

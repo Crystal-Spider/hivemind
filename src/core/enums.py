@@ -225,6 +225,12 @@ class GameType(Flag):
   def name(self) -> str | None:
     return self._name_ and self._name_.title()
 
+  @property
+  def index(self) -> int:
+    subset = [flag for flag in GameType if flag != GameType.BASE]
+    index = sum(1 << i for i, flag in enumerate(subset) if flag in self)
+    return index
+
   def __str__(self) -> str:
     return "".join(str(gametype.name) + ("+" if gametype is GameType.BASE and len(self) > 1 else "") for gametype in self)
 

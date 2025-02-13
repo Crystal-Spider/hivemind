@@ -69,7 +69,7 @@ class Board():
         else:
           self._bug_to_pos[Bug(color, BugType(expansion.name))] = None
     self._bugs: Final[list[Bug]] = list(self._bug_to_pos.keys())
-    self._hash: ZobristHash = ZobristHash()
+    self._hash: ZobristHash = ZobristHash(self.type)
     self._play_initial_moves(moves)
 
   def __str__(self) -> str:
