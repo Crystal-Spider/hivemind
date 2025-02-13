@@ -67,6 +67,10 @@ class Option(StrEnum):
   """
   AI strategy for player black.
   """
+  MAX_BRANCHING_FACTOR = "MaxBranchingFactor"
+  """
+  Maximum amount of moves that can be considered for each node by Minmax agents.
+  """
   NUM_THREADS = "NumThreads"
   """
   Available threads to parallelize AI thinking.

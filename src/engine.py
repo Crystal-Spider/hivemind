@@ -1,6 +1,6 @@
 import os
 import re
-from typing import TypeGuard, Final, Optional, Any
+from typing import TypeGuard, Final, Optional, Callable, Any
 from copy import deepcopy
 from core.enums import Command, Option, OptionType, Strategy, PlayerColor
 from core.board import Board
@@ -19,15 +19,16 @@ class Engine():
   OPTION_TYPES: Final[dict[Option, OptionType]] = {
     Option.STRATEGY_WHITE: OptionType.ENUM,
     Option.STRATEGY_BLACK: OptionType.ENUM,
+    Option.MAX_BRANCHING_FACTOR: OptionType.INT,
     Option.NUM_THREADS: OptionType.INT
   }
   """
   Map for options and their type.
   """
 
-  BRAINS: Final[dict[Strategy, Brain]] = {
-    Strategy.RANDOM: Random(),
-    Strategy.MINMAX: AlphaBetaPruner()
+  BRAINS: Final[dict[Strategy, Callable[[], Brain]]] = {
+    Strategy.RANDOM: lambda: Random(),
+    Strategy.MINMAX: lambda: AlphaBetaPruner()
   }
   """
   Map for strategies and the respective brain.
@@ -39,6 +40,19 @@ class Engine():
   DEFAULT_STRATEGY_BLACK: Final[Strategy] = Strategy.MINMAX
   """
   Default value for option StrategyBlack.
+  """
+
+  MIN_MAX_BRANCHING_FACTOR: Final[int] = 8
+  """
+  Minimum value for option MaxBranchingFactor.
+  """
+  DEFAULT_MAX_BRANCHING_FACTOR: Final[int] = 256
+  """
+  Default value for option MaxBranchingFactor.
+  """
+  MAX_MAX_BRANCHING_FACTOR: Final[int] = 1024
+  """
+  Maximum value for option MaxBranchingFactor.
   """
 
   MIN_NUM_THREADS: Final[int] = 1
@@ -57,10 +71,11 @@ class Engine():
   def __init__(self) -> None:
     self.strategywhite: Strategy = Engine.DEFAULT_STRATEGY_WHITE
     self.strategyblack: Strategy = Engine.DEFAULT_STRATEGY_BLACK
+    self.maxbranchingfactor: int = Engine.DEFAULT_MAX_BRANCHING_FACTOR
     self.numthreads: int = Engine.DEFAULT_NUM_THREADS
     self.brains: dict[PlayerColor, Brain] = {
-      PlayerColor.WHITE: Engine.BRAINS[Engine.DEFAULT_STRATEGY_WHITE],
-      PlayerColor.BLACK: Engine.BRAINS[Engine.DEFAULT_STRATEGY_BLACK]
+      PlayerColor.WHITE: Engine.BRAINS[Engine.DEFAULT_STRATEGY_WHITE](),
+      PlayerColor.BLACK: Engine.BRAINS[Engine.DEFAULT_STRATEGY_BLACK]()
     }
     self.board: Optional[Board] = None
 
@@ -220,7 +235,7 @@ class Engine():
       case Option.STRATEGY_WHITE | Option.STRATEGY_BLACK:
         print(";".join(Strategy))
       # Handle options with type Int or Float
-      case Option.NUM_THREADS:
+      case Option.MAX_BRANCHING_FACTOR | Option.NUM_THREADS:
         print(f"{self[f"MIN_{option.name}"]};{self[f"MAX_{option.name}"]}")
 
   def _set_option(self, option: Option, value: str) -> None:
@@ -237,7 +252,7 @@ class Engine():
       # Handle options with type Strategy
       case Option.STRATEGY_WHITE | Option.STRATEGY_BLACK if value in Strategy:
         self[option.lower()] = Strategy(value)
-        self.brains[PlayerColor[option.name.split("_")[1]]] = Engine.BRAINS[Strategy(value)]
+        self.brains[PlayerColor[option.name.split("_")[1]]] = Engine.BRAINS[Strategy(value)]()
       # Handle options with type Int
       case Option.NUM_THREADS if value.isdigit() and self[f"MIN_{option.name}"] <= int(value) <= self[f"MAX_{option.name}"]:
         self[option.lower()] = int(value)
@@ -280,9 +295,9 @@ class Engine():
     """
     if self.is_active(self.board):
       if restriction == "time" and re.fullmatch(r"[0-9]{2}:[0-5][0-9]:[0-5][0-9]", value):
-        print(self.brains[self.board.current_player_color].calculate_best_move(deepcopy(self.board), time_limit=sum(factor * int(time) for factor, time in zip([3600, 60, 1], value.split(':')))))
+        print(self.brains[self.board.current_player_color].calculate_best_move(deepcopy(self.board), self.maxbranchingfactor, time_limit=sum(factor * int(time) for factor, time in zip([3600, 60, 1], value.split(':')))))
       elif restriction == "depth" and value.isdigit() and (max_depth := int(value)) > 0:
-        print(self.brains[self.board.current_player_color].calculate_best_move(deepcopy(self.board), max_depth=max_depth))
+        print(self.brains[self.board.current_player_color].calculate_best_move(deepcopy(self.board), self.maxbranchingfactor, max_depth=max_depth))
       else:
         self.error(f"Invalid arguments for command '{Command.BESTMOVE}'")
 

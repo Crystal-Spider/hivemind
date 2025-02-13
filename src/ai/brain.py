@@ -18,7 +18,7 @@ class Brain(ABC):
     self._last_time_limit: int = 0
     self._last_turn: int = 0
 
-  def calculate_best_move(self, board: Board, max_depth: int = 0, time_limit: int = 0) -> str:
+  def calculate_best_move(self, board: Board, max_branching_factor: int, max_depth: int = 0, time_limit: int = 0) -> str:
     """
     Calculates the best move for the given board state, following the agent's policy.
 
@@ -36,11 +36,11 @@ class Brain(ABC):
       self._last_max_depth = max_depth
       self._last_time_limit = time_limit
       self._last_turn = board.turn
-      self._best_move_cache = self._find_best_move(board, max_depth, time_limit)
+      self._best_move_cache = self._find_best_move(board, max_branching_factor, max_depth, time_limit)
     return self._best_move_cache
 
   @abstractmethod
-  def _find_best_move(self,  board: Board, max_depth: int = 0, time_limit: int = 0) -> str:
+  def _find_best_move(self, board: Board, max_branching_factor: int, max_depth: int = 0, time_limit: int = 0) -> str:
     """
     _summary_
 
@@ -66,7 +66,7 @@ class Random(Brain):
   Random acting AI agent.
   """
 
-  def _find_best_move(self, board: Board, max_depth: int = 0, time_limit: int = 0) -> str:
+  def _find_best_move(self, board: Board, max_branching_factor: int, max_depth: int = 0, time_limit: int = 0) -> str:
     sleep(0.5)
     return choice(board.valid_moves.split(";"))
 
@@ -93,19 +93,19 @@ class AlphaBetaPruner(Brain):
     self._killer_moves: dict[int, list[str]] = {}
     self._history_heuristic: dict[str, int] = {}
 
-  def _find_best_move(self, board: Board, max_depth: int = 0, time_limit: int = 0) -> str:
+  def _find_best_move(self, board: Board, max_branching_factor: int, max_depth: int = 0, time_limit: int = 0) -> str:
     start_time = time()
     best_move = board.valid_moves.split(";")[0]
     depth = 0
     while not max_depth or depth < max_depth:
       depth += 1
-      best_move, _ = self._alpha_beta_search(board, depth, float('-inf'), float('inf'), True, start_time, time_limit)
+      best_move, _ = self._alpha_beta_search(board, max_branching_factor, depth, float('-inf'), float('inf'), True, start_time, time_limit)
       if time_limit and time() - start_time > time_limit:
         break
     self._transpos_table.flush()
     return best_move or Move.PASS
 
-  def _alpha_beta_search(self, node: Board, depth: int, alpha: float, beta: float, maximizing: bool, start_time: float, time_limit: int) -> tuple[Optional[str], float]:
+  def _alpha_beta_search(self, node: Board, max_branching_factor: int, depth: int, alpha: float, beta: float, maximizing: bool, start_time: float, time_limit: int) -> tuple[Optional[str], float]:
     node_hash = node.hash()
     cached_entry = self._transpos_table[node_hash]
     if cached_entry and cached_entry.depth >= depth:
@@ -123,13 +123,13 @@ class AlphaBetaPruner(Brain):
       return None, self._evaluate(node)
     
     best_move = self._pv_table.get(node_hash, None)
-    children = self._gen_children(node)
+    children = self._gen_children(node, max_branching_factor)
     children.sort(key=lambda x: self._move_order_heuristic(x[0], x[1], best_move, depth), reverse=maximizing)
 
     if maximizing:
       max_value = float('-inf')
       for child, move in children:
-        _, value = self._alpha_beta_search(child, depth - 1, alpha, beta, not maximizing, start_time, time_limit)
+        _, value = self._alpha_beta_search(child, max_branching_factor, depth - 1, alpha, beta, not maximizing, start_time, time_limit)
         if max_value < value:
           max_value = value
           best_move = move
@@ -145,7 +145,7 @@ class AlphaBetaPruner(Brain):
     else:
       min_value = float('inf')
       for child, move in children:
-        _, value = self._alpha_beta_search(child, depth - 1, alpha, beta, not maximizing, start_time, time_limit)
+        _, value = self._alpha_beta_search(child, max_branching_factor, depth - 1, alpha, beta, not maximizing, start_time, time_limit)
         if min_value > value:
           min_value = value
           best_move = move
@@ -187,7 +187,7 @@ class AlphaBetaPruner(Brain):
     """
     self._history_heuristic[move] = self._history_heuristic.get(move, 0) + 2 ** depth
 
-  def _gen_children(self, parent: Board) -> list[tuple[Board, str]]:
+  def _gen_children(self, parent: Board, max_branching_factor: int) -> list[tuple[Board, str]]:
     """
     Generates valid children from the given parent.
 
@@ -196,7 +196,7 @@ class AlphaBetaPruner(Brain):
     :return: List of children.
     :rtype: list[tuple[Board, str]]
     """
-    return [(deepcopy(parent).play(move), move) for move in parent.valid_moves.split(";") if not parent.gameover]
+    return [(deepcopy(parent).play(move), move) for move in parent.valid_moves.split(";")[:max_branching_factor] if not parent.gameover]
 
   def _evaluate(self, node: Board) -> float:
     """
