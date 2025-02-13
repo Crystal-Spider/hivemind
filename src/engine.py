@@ -55,12 +55,12 @@ class Engine():
   """
 
   def __init__(self) -> None:
-    self.strategywhite: Strategy = self.DEFAULT_STRATEGY_WHITE
-    self.strategyblack: Strategy = self.DEFAULT_STRATEGY_BLACK
-    self.numthreads: int = self.DEFAULT_NUM_THREADS
+    self.strategywhite: Strategy = Engine.DEFAULT_STRATEGY_WHITE
+    self.strategyblack: Strategy = Engine.DEFAULT_STRATEGY_BLACK
+    self.numthreads: int = Engine.DEFAULT_NUM_THREADS
     self.brains: dict[PlayerColor, Brain] = {
-      PlayerColor.WHITE: self.BRAINS[self.DEFAULT_STRATEGY_WHITE],
-      PlayerColor.BLACK: self.BRAINS[self.DEFAULT_STRATEGY_BLACK]
+      PlayerColor.WHITE: Engine.BRAINS[Engine.DEFAULT_STRATEGY_WHITE],
+      PlayerColor.BLACK: Engine.BRAINS[Engine.DEFAULT_STRATEGY_BLACK]
     }
     self.board: Optional[Board] = None
 
@@ -108,7 +108,7 @@ class Engine():
     """
     Handles 'info' command.
     """
-    print(f"id HivemindEngine v{self.VERSION}")
+    print(f"id HivemindEngine v{Engine.VERSION}")
     print("Mosquito;Ladybug;Pillbug")
 
   def help(self, arguments: list[str]) -> None:
@@ -214,7 +214,7 @@ class Engine():
     :param option: Option to print.
     :type option: Option
     """
-    print(f"{option};{self.OPTION_TYPES[option]};{self[option.lower()]};{self[f"DEFAULT_{option.name}"]};", end="")
+    print(f"{option};{Engine.OPTION_TYPES[option]};{self[option.lower()]};{self[f"DEFAULT_{option.name}"]};", end="")
     match option:
       # Handle options with type Strategy
       case Option.STRATEGY_WHITE | Option.STRATEGY_BLACK:
@@ -237,7 +237,7 @@ class Engine():
       # Handle options with type Strategy
       case Option.STRATEGY_WHITE | Option.STRATEGY_BLACK if value in Strategy:
         self[option.lower()] = Strategy(value)
-        self.brains[PlayerColor[option.name.split("_")[1]]] = self.BRAINS[Strategy(value)]
+        self.brains[PlayerColor[option.name.split("_")[1]]] = Engine.BRAINS[Strategy(value)]
       # Handle options with type Int
       case Option.NUM_THREADS if value.isdigit() and self[f"MIN_{option.name}"] <= int(value) <= self[f"MAX_{option.name}"]:
         self[option.lower()] = int(value)

@@ -74,6 +74,7 @@ class AlphaBetaPruner(Brain):
   """
   AI agent following an alpha-beta pruning policy.
   """
+
   def _empty_cache(self) -> None:
     super()._empty_cache()
     # TODO: Implement restoration of previously cached data if undo.

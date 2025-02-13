@@ -8,6 +8,7 @@ class Board():
   """
   Game Board.
   """
+
   ORIGIN: Final[Position] = Position(0, 0)
   """
   Position of the first piece played.
