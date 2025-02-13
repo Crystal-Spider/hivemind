@@ -52,7 +52,6 @@ jobs:
         uses: ./.github/workflows/version_update.yml
         with:
           version: ${{ github.event.inputs.version }}
-        secrets: inherit
 
       - name: Build Release Artifact
         run: pyinstaller src/engine.py --name HivemindEngine --noconsole --onefile
