@@ -125,6 +125,8 @@ class AlphaBetaPruner(Brain):
     best_move = self._pv_table.get(node_hash, None)
     children = self._gen_children(node, max_branching_factor)
     children.sort(key=lambda x: self._move_order_heuristic(x[0], x[1], best_move, depth), reverse=maximizing)
+    if len(children):
+      del children[max_branching_factor:]
 
     if maximizing:
       max_value = float('-inf')
@@ -196,7 +198,7 @@ class AlphaBetaPruner(Brain):
     :return: List of children.
     :rtype: list[tuple[Board, str]]
     """
-    return [(deepcopy(parent).play(move), move) for move in parent.valid_moves.split(";")[:max_branching_factor] if not parent.gameover]
+    return [(deepcopy(parent).play(move), move) for move in parent.valid_moves.split(";") if not parent.gameover]
 
   def _evaluate(self, node: Board) -> float:
     """
