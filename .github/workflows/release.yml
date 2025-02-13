@@ -1,4 +1,4 @@
-name: Release
+name: Release Workflow
 
 on:
   workflow_dispatch:
@@ -22,23 +22,55 @@ jobs:
       disable_checks: ${{ github.event.inputs.disable_checks }}
     secrets: inherit
 
-  build:
-    needs: version-validation
-    permissions:
-      contents: read
-    uses: ./.github/workflows/build.yml
-    secrets: inherit
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-  test:
-    needs: build
-    permissions:
-      contents: read
-    uses: ./.github/workflows/test.yml
-    secrets: inherit
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.7'
+          cache: 'pip'
 
-  verify:
-    needs: test
-    permissions:
-      contents: read
-    uses: ./.github/workflows/verify.yml
-    secrets: inherit
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Tests
+        run: pytest test/
+
+      - name: Static Analysis
+        run: prospector src
+
+      - name: Build Release Artifact
+        run: pyinstaller src/engine.py --name HivemindEngine --noconsole --onefile
+
+      - name: Create Release
+        permissions:
+          contents: write
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          body: See [Changelog](https://github.com/Crystal-Spider/hivemind/blob/main/CHANGELOG.md#).
+          files: dist/HivemindEngine*
+          fail_on_unmatched_files: true
+          draft: true # TODO: Change, it's only for testing.
+          prerelease: false
+
+      - name: Generate Documentation
+        run: |
+          cd docs
+          make html
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/build/html'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
