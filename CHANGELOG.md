@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Nothing new.
 
+## [v1.4.0] - 2025/02/dd
+
+- Drastically improved board evaluation for minmax agents.
+- Added `MaxBranchingFactor` engine option, to limit the amount of moves a minmax agent can expand from a single node.
+- Added a print of some metrics when searching for the best move with minmax agents.
+- Fix best move search with minmax agents when undos are performed.
+- Fix best move search with minmax agents when new games are started.
+
+## [v1.3.0] - 2025/02/13
+
+- Drastically improve minmax agents.
+- Major code changes:
+  * Implemented Zobrist Hash for board states.
+  * Moved almost all files.
+- Minor refractors or improvements.
+- Removed executable and pre-built docs from source code. They will be automatically generated for releases in future versions.
+
 ## [v1.2.0] - 2024/11/29
 
 - Add Minmax with alpha-beta pruning agent.
@@ -38,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 [Unreleased]: https://github.com/crystal-spider/hivemind
 [README]: https://github.com/crystal-spider/hivemind#readme
 
+[v1.4.0]: https://github.com/crystal-spider/hivemind/releases?q=1.4.0
+[v1.3.0]: https://github.com/crystal-spider/hivemind/releases?q=1.3.0
 [v1.2.0]: https://github.com/crystal-spider/hivemind/releases?q=1.2.0
 [v1.1.0]: https://github.com/crystal-spider/hivemind/releases?q=1.1.0
 [v1.0.0]: https://github.com/crystal-spider/hivemind/releases?q=1.0.0

@@ -1,6 +1,6 @@
 import pytest
-from enums import PlayerColor, BugType, Direction
-from game import Position, Bug, Move
+from core.enums import PlayerColor, BugType, Direction
+from core.game import Position, Bug, Move
 
 class TestPosition():
   def test_init(self):

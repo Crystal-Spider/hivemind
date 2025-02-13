@@ -1,13 +1,14 @@
 import re
 from typing import Final, Optional, Set
-from enums import GameType, GameState, PlayerColor, BugType, Direction
-from game import Position, Bug, Move
-from hash import ZobristHash, ZobristHashReference
+from core.enums import GameType, GameState, PlayerColor, BugType, Direction
+from core.game import Position, Bug, Move
+from core.hash import ZobristHash
 
 class Board():
   """
   Game Board.
   """
+
   ORIGIN: Final[Position] = Position(0, 0)
   """
   Position of the first piece played.
@@ -30,7 +31,7 @@ class Board():
     """
     Game Board instantation.
 
-    :param gamestring: GameString, defaults to "".
+    :param gamestring: GameString, defaults to `""`.
     :type gamestring: str, optional
     """
     game_type, state, turn, moves = self._parse_gamestring(gamestring)
@@ -67,8 +68,8 @@ class Board():
           self._bug_to_pos[Bug(color, BugType.SOLDIER_ANT, 3)] = None
         else:
           self._bug_to_pos[Bug(color, BugType(expansion.name))] = None
-    self._hash_refs: dict[ZobristHashReference, Optional[Bug]] = {ZobristHashReference.ORIGIN: None, ZobristHashReference.ORIENTATION: None}
-    self._hash = ZobristHash(len(self._bug_to_pos), len(self._bug_to_pos), 5 + (GameType.M in self.type) * 2, lambda reference: self.pos_from_bug(self._hash_refs[reference]))
+    self._bugs: Final[list[Bug]] = list(self._bug_to_pos.keys())
+    self._hash: ZobristHash = ZobristHash(self.type)
     self._play_initial_moves(moves)
 
   def __str__(self) -> str:
@@ -136,12 +137,12 @@ class Board():
             if self.turn == 0:
               if self._can_play_on_first_move(bug):
                 # Add the only valid placement for the current bug piece
-                moves.add(Move(bug, None, self.ORIGIN))
+                moves.add(Move(bug, None, Board.ORIGIN))
             # Turn 0 is Black player's first turn
             elif self.turn == 1:
               if self._can_play_on_first_move(bug):
                 # Add all valid placements for the current bug piece (can be placed only around the first White player's first piece)
-                moves.update(Move(bug, None, self._get_neighbor(self.ORIGIN, direction)) for direction in Direction.flat())
+                moves.update(Move(bug, None, self._get_neighbor(Board.ORIGIN, direction)) for direction in Direction.flat())
             # Bug piece has not been played yet
             elif not pos:
               # Check for hand placement and queen placement related rules.
@@ -205,10 +206,6 @@ class Board():
           self._pos_to_bug[move.destination].append(move.bug)
         else:
           self._pos_to_bug[move.destination] = [move.bug]
-        if self.turn == 1:
-          self._hash_refs[ZobristHashReference.ORIGIN] = move.bug
-        elif self.turn == 2:
-          self._hash_refs[ZobristHashReference.ORIENTATION] = move.bug
         black_queen_surrounded = self.count_queen_neighbors(PlayerColor.BLACK) == 6
         white_queen_surrounded = self.count_queen_neighbors(PlayerColor.WHITE) == 6
         if black_queen_surrounded and white_queen_surrounded:
@@ -217,6 +214,7 @@ class Board():
           self.state = GameState.WHITE_WINS
         elif white_queen_surrounded:
           self.state = GameState.BLACK_WINS
+      self._update_hash()
       return self
     raise ValueError(f"You can't {"play" if move else Move.PASS} when the game is over")
 
@@ -224,7 +222,7 @@ class Board():
     """
     Undoes the specified amount of moves.
 
-    :param amount: Amount of moves to undo, defaults to 1.
+    :param amount: Amount of moves to undo, defaults to `1`.
     :type amount: int, optional
     :raises ValueError: If there are not enough moves to undo.
     :raises ValueError: If the game has yet to begin.
@@ -234,8 +232,9 @@ class Board():
         if self.state is not GameState.IN_PROGRESS:
           self.state = GameState.IN_PROGRESS
         for _ in range(amount):
-          self._valid_moves_cache[self.current_player_color] = None
           self.turn -= 1
+          self._update_hash()
+          self._valid_moves_cache[self.current_player_color] = None
           self.move_strings.pop()
           move = self.moves.pop()
           if move:
@@ -245,10 +244,6 @@ class Board():
               self._pos_to_bug[move.origin].append(move.bug)
         if self.turn == 0:
           self.state = GameState.NOT_STARTED
-          self._hash_refs[ZobristHashReference.ORIGIN] = None
-          self._hash_refs[ZobristHashReference.ORIENTATION] = None
-        elif self.turn == 1:
-          self._hash_refs[ZobristHashReference.ORIENTATION] = None
       else:
         raise ValueError(f"Not enough moves to undo: asked for {amount} but only {len(self.moves)} were made")
     else:
@@ -277,6 +272,31 @@ class Board():
             break
       return Move.stringify(moved, relative, direction)
     return Move.PASS
+
+  def count_moves_near_queen(self, color: PlayerColor) -> int:
+    """
+    Returns the number of available moves that reach the neighboring tiles of the enemy queen bee.
+
+    :param color: Player's color.
+    :type color: PlayerColor
+    :return: Number of moves that reach the enemy queen bee.
+    :rtype: int
+    """
+    valid_moves = self.calculate_valid_moves_for_player(color, True)
+    
+    collision_count = 0
+    for move in valid_moves:
+      dest = move.destination
+      # Get the neighbouring tiles of the destination
+      neighbours = [self._get_neighbor(dest,direction) for direction in Direction]
+      # Check if the enemy queen bee is in any of the neighbouring tiles
+      for pos in neighbours:
+        if pos in self._pos_to_bug:
+          for bug in self._pos_to_bug[pos]:
+            if bug.color.opposite is color and bug.type is BugType.QUEEN_BEE:
+              collision_count += 1
+    
+    return collision_count
 
   def count_queen_neighbors(self, color: PlayerColor) -> float:
     """
@@ -310,6 +330,15 @@ class Board():
     :rtype: Optional[Position]
     """
     return self._bug_to_pos[bug] if bug in self._bug_to_pos else None
+
+  def hash(self) -> int:
+    """
+    Returns the current Zobrist Hash value.
+
+    :return: Zobrist Hash value.
+    :rtype: int
+    """
+    return self._hash.value
 
   def _parse_turn(self, turn: str) -> int:
     """
@@ -397,7 +426,7 @@ class Board():
     :type bug: Bug
     :param origin: Initial position of the bug piece.
     :type origin: Position
-    :param depth: Optional fixed depth of the move, defaults to 0.
+    :param depth: Optional fixed depth of the move, defaults to `0`.
     :type depth: int, optional
     :return: Set of valid sliding moves.
     :rtype: Set[Move]
@@ -427,7 +456,7 @@ class Board():
     :type bug: Bug
     :param origin: Initial position of the bug piece.
     :type origin: Position
-    :param virtual: Whether the bug is not at origin, and is just passing by as part of its full move, defaults to False.
+    :param virtual: Whether the bug is not at origin, and is just passing by as part of its full move, defaults to `False`.
     :type virtual: bool, optional
     :return: Set of valid Beetle moves.
     :rtype: Set[Move]
@@ -477,7 +506,7 @@ class Board():
     :type bug: Bug
     :param origin: Initial position of the bug piece.
     :type origin: Position
-    :param special_only: Whether to include special moves only, defaults to False.
+    :param special_only: Whether to include special moves only, defaults to `False`.
     :type special_only: bool, optional
     :return: Set of valid Mosquito moves.
     :rtype: Set[Move]
@@ -640,7 +669,7 @@ class Board():
       bug_string_1, _, _, _, _, left_dir, bug_string_2, _, _, _, right_dir = match.groups()
       if not left_dir or not right_dir:
         moved = Bug.parse(bug_string_1)
-        if (relative_pos := self.pos_from_bug(Bug.parse(bug_string_2)) if bug_string_2 else self.ORIGIN):
+        if (relative_pos := self.pos_from_bug(Bug.parse(bug_string_2)) if bug_string_2 else Board.ORIGIN):
           move = Move(moved, self.pos_from_bug(moved), self._get_neighbor(relative_pos, Direction(f"{left_dir}|") if left_dir else Direction(f"|{right_dir or ""}")))
           if move in self.calculate_valid_moves_for_player(self.current_player_color):
             return move
@@ -671,29 +700,14 @@ class Board():
     :return: Neighboring position in the specified direction.
     :rtype: Position
     """
-    return position + self.NEIGHBOR_DELTAS[direction.delta_index]
+    return position + Board.NEIGHBOR_DELTAS[direction.delta_index]
 
-  def count_moves_near_queen(self, color: PlayerColor) -> int:
-    """
-    Returns the number of available moves that reach the neighboring tiles of the enemy queen bee.
-
-    :param color: Player's color.
-    :type color: PlayerColor
-    :return: Number of moves that reach the enemy queen bee.
-    :rtype: int
-    """
-    valid_moves = self.calculate_valid_moves_for_player(color, True)
-    
-    collision_count = 0
-    for move in valid_moves:
-      dest = move.destination
-      # Get the neighbouring tiles of the destination
-      neighbours = [self._get_neighbor(dest,direction) for direction in Direction]
-      # Check if the enemy queen bee is in any of the neighbouring tiles
-      for pos in neighbours:
-        if pos in self._pos_to_bug:
-          for bug in self._pos_to_bug[pos]:
-            if bug.color.opposite is color and bug.type is BugType.QUEEN_BEE:
-              collision_count += 1
-    
-    return collision_count
+  def _update_hash(self) -> None:
+    self._hash.toggle_turn()
+    if len(self.moves) > 1 and (second_last_move := self.moves[-2]) is not None:
+      self._hash.toggle_last_moved_piece(self._bugs.index(second_last_move.bug))
+    if len(self.moves) > 0 and (last_move := self.moves[-1]) is not None:
+      self._hash.toggle_last_moved_piece(self._bugs.index(last_move.bug))
+      if (origin := last_move.origin) is not None:
+        self._hash.toggle_piece(self._bugs.index(last_move.bug), origin, len(self.bugs_from_pos(origin)))
+      self._hash.toggle_piece(self._bugs.index(last_move.bug), last_move.destination, len(self.bugs_from_pos(last_move.destination)) - 1)

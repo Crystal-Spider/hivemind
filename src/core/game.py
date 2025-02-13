@@ -1,11 +1,12 @@
 import re
 from typing import Final, Optional
-from enums import PlayerColor, BugType, Direction
+from core.enums import PlayerColor, BugType, Direction
 
 class Position():
   """
   Tile position.
   """
+
   def __init__(self, q: int, r: int):
     self.q: Final[int] = q
     self.r: Final[int] = r
@@ -47,6 +48,7 @@ class Bug():
   """
   Bug piece.
   """
+
   COLORS: Final[dict[str, PlayerColor]] = {color.code: color for color in PlayerColor}
   """
   Color code map.
@@ -67,9 +69,9 @@ class Bug():
     :return: Bug piece.
     :rtype: Bug
     """
-    if (match := re.fullmatch(cls.REGEX, bug)):
+    if (match := re.fullmatch(Bug.REGEX, bug)):
       color, bug_type, bug_id = match.groups()
-      return Bug(cls.COLORS[color], BugType(bug_type), int(bug_id or 0))
+      return Bug(Bug.COLORS[color], BugType(bug_type), int(bug_id or 0))
     raise ValueError(f"'{bug}' is not a valid BugString")
 
   def __init__(self, color: PlayerColor, bug_type: BugType, bug_id: int = 0) -> None:
@@ -90,6 +92,7 @@ class Move():
   """
   Move.
   """
+
   PASS: Final[str] = "pass"
   """
   Pass move.
@@ -106,9 +109,9 @@ class Move():
 
     :param moved: Bug piece moved.
     :type moved: Bug
-    :param relative: Bug piece relative to which the other bug piece is moved, defaults to None.
+    :param relative: Bug piece relative to which the other bug piece is moved, defaults to `None`.
     :type relative: Optional[Bug], optional
-    :param direction: Direction of the destination tile with respect to the relative bug piece, defaults to None.
+    :param direction: Direction of the destination tile with respect to the relative bug piece, defaults to `None`.
     :type direction: Optional[Direction], optional
     :return: MoveString.
     :rtype: str
