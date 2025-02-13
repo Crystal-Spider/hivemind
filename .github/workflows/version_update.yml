@@ -17,7 +17,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          sparse-checkout: src/engine.py
+          sparse-checkout: |
+            src/engine.py
+            docs/source/conf.py
           sparse-checkout-cone-mode: false
       - name: Check if version has changed
         id: check_version
@@ -32,18 +34,20 @@ jobs:
             exit 0
           else
             echo "Versions are different."
-            echo "::set-output name=outcome::version_changed"
+            echo "::set-output name=outcome::version_change"
           fi
       - name: Update version
-        if: steps.check_version.outputs.outcome == 'version_changed'
+        if: steps.check_version.outputs.outcome == 'version_change'
         run: |
           version_input="${{ github.event.inputs.version }}"
           sed -i 's/^  VERSION: Final\[str\] = ".*"/  VERSION: Final[str] = "$version_input"/' src/engine.py
+          sed -i "s/^release = '.*'/release = '$version_input'/" docs/source/conf.py
       - name: Commit and push changes
-        if: steps.check_version.outputs.outcome == 'version_changed'
+        if: steps.check_version.outputs.outcome == 'version_change'
         run: |
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@users.noreply.github.com'
-          git add gradle.properties
-          git commit -m "Update mod_version to ${{ github.event.inputs.version }}"
+          git add src/engine.py
+          git add docs/source/conf.py
+          git commit -m "Update release version to ${{ github.event.inputs.version }}"
           git push
