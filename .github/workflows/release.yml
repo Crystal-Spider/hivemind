@@ -12,6 +12,11 @@ on:
         description: Disable version consistency checks
         default: false
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   version-validation:
     permissions:
@@ -47,10 +52,6 @@ jobs:
 
   release:
     needs: version-update
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -68,8 +69,6 @@ jobs:
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }} # Use a PAT if needed
         with:
           tag_name: v${{ github.event.inputs.version }}
           body: See [Changelog](https://github.com/Crystal-Spider/hivemind/blob/main/CHANGELOG.md#).
@@ -78,19 +77,12 @@ jobs:
           draft: true # TODO: Change, it's only for testing.
           prerelease: false
 
-      - name: Generate Documentation
-        run: |
-          cd docs
-          make html
+  docs:
+    needs: release
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs.yml
+    secrets: inherit
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages Artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: 'docs/build/html'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
