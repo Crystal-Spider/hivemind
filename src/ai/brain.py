@@ -1,14 +1,11 @@
-from typing import Optional, Set, Iterator
+from typing import Optional
 from random import choice
 from time import sleep, time
 from copy import deepcopy
 from abc import ABC, abstractmethod
 from core.board import Board
-
-type ABNode = tuple[Board, float, float, float, bool, Iterator[tuple[Board, str]], float, str]
-"""
-Alpha-beta pruning node.
-"""
+from core.game import Move
+from ai.table import TranspositionTable, TranspositionTableEntry, TranspositionTableEntryType
 
 class Brain(ABC):
   """
@@ -16,7 +13,7 @@ class Brain(ABC):
   """
 
   def __init__(self) -> None:
-    self._cache: Optional[str] = None
+    self._best_move_cache: Optional[str] = None
     self._last_max_depth: int = 0
     self._last_time_limit: int = 0
     self._last_turn: int = 0
@@ -34,13 +31,13 @@ class Brain(ABC):
     :return: Stringified best move.
     :rtype: str
     """
-    if not self._cache or self._last_turn != board.turn or self._last_max_depth != max_depth or self._last_time_limit != time_limit:
+    if not self._best_move_cache or self._last_turn != board.turn or self._last_max_depth != max_depth or self._last_time_limit != time_limit:
       self._empty_cache()
       self._last_max_depth = max_depth
       self._last_time_limit = time_limit
       self._last_turn = board.turn
-      self._cache = self._find_best_move(board, max_depth, time_limit)
-    return self._cache
+      self._best_move_cache = self._find_best_move(board, max_depth, time_limit)
+    return self._best_move_cache
 
   @abstractmethod
   def _find_best_move(self,  board: Board, max_depth: int = 0, time_limit: int = 0) -> str:
@@ -60,9 +57,9 @@ class Brain(ABC):
   def _empty_cache(self) -> None:
     """
     Empties the current cache for the best move.  
-    To be called OUTSIDE this class when needed.
+    Might empty more data depending on the agent.
     """
-    self._cache = None
+    self._best_move_cache = None
 
 class Random(Brain):
   """
@@ -77,107 +74,130 @@ class AlphaBetaPruner(Brain):
   """
   AI agent following an alpha-beta pruning policy.
   """
+  def _empty_cache(self) -> None:
+    super()._empty_cache()
+    # TODO: Implement restoration of previously cached data if undo.
+    # Idea:
+    #   Do not delete previous data, but rather store it in other data structures.
+    #   Or, maybe, keep track of all best moves returned and which opponent's move led to them. Remove only the moves with index greater than ply (turn // 2) if the opponent's move changes.
+    # TODO: Implement clearing cache for a new game (if different GameType).
+    # Idea:
+    #   Store the previous game type and clear the cache if it changes.
+    #   If it does not change, treat the new game as if an undo of everything was performed.
+
+  def __init__(self) -> None:
+    super().__init__()
+    self._transpos_table: TranspositionTable = TranspositionTable()
+    self._pv_table: dict[int, str] = {}
+    self._killer_moves: dict[int, list[str]] = {}
+    self._history_heuristic: dict[str, int] = {}
 
   def _find_best_move(self, board: Board, max_depth: int = 0, time_limit: int = 0) -> str:
-    return self.abpruning(board, max_depth, time_limit)
-
-  def abpruning(self, root: Board, max_depth: int = 0, time_limit: int = 0) -> str:
-    """
-    Minmax with alpha-beta pruning to search for the best move, given the depth and time constraints.  
-    This is an iterative version rather than recursive.
-
-    :param root: Starting node.
-    :type root: Board
-    :param max_depth: Maximum allowed depth to search at, defaults to 0.
-    :type max_depth: int, optional
-    :param time_limit: Maximum amount of seconds allowed to spend, defaults to 0.
-    :type time_limit: int, optional
-    :return: Best move.
-    :rtype: str
-    """
     start_time = time()
-    total_nodes = 0
-
-    # Stack to simulate recursion
-    stack: list[ABNode] = []
-    # Each stack frame contains: (node, depth, alpha, beta, maximizing, child_iter, best_value, best_move)
-    stack.append((root, 0, float('-inf'), float('inf'), True, iter(self.gen_children(root)), float('-inf'), root.valid_moves.split(";")[0]))
-
-    result: str = root.valid_moves.split(";")[0]
-
-    while stack:
+    best_move = board.valid_moves.split(";")[0]
+    depth = 0
+    while not max_depth or depth < max_depth:
+      depth += 1
+      best_move, _ = self._alpha_beta_search(board, depth, float('-inf'), float('inf'), True, start_time, time_limit)
       if time_limit and time() - start_time > time_limit:
         break
+    self._transpos_table.flush()
+    return best_move or Move.PASS
 
-      print(f"Stack size: {len(stack)}")
-      total_nodes += 1
-      node, depth, alpha, beta, maximizing, child_iter, best_value, best_move = stack.pop()
+  def _alpha_beta_search(self, node: Board, depth: int, alpha: float, beta: float, maximizing: bool, start_time: float, time_limit: int) -> tuple[Optional[str], float]:
+    node_hash = node.hash()
+    cached_entry = self._transpos_table[node_hash]
+    if cached_entry and cached_entry.depth >= depth:
+      match cached_entry.type:
+        case TranspositionTableEntryType.EXACT:
+          return cached_entry.move, cached_entry.value
+        case TranspositionTableEntryType.LOWER_BOUND:
+          alpha = max(alpha, cached_entry.value)
+        case TranspositionTableEntryType.UPPER_BOUND:
+          beta = min(beta, cached_entry.value)
+      if alpha >= beta:
+        return cached_entry.move, cached_entry.value
 
-      if depth >= (max_depth or float('inf')) or node.gameover:
-        # Evaluate leaf or terminal node
-        evaluation = self.evaluate(node)
-        if stack:
-          # Pass the evaluation result back up the stack
-          stack[-1] = self._update_parent(stack[-1], evaluation, best_move)
-        else:
-          # If this is the root node, store the result
-          result = best_move
-        continue
-
-      try:
-        # Process the next child
-        child, move = next(child_iter)
-        # Push this node back onto the stack to continue processing later
-        stack.append((node, depth, alpha, beta, maximizing, child_iter, best_value, best_move))
-        # Push the child onto the stack for processing
-        stack.append((child, depth + 1, alpha, beta, not maximizing, iter(self.gen_children(child)), float('-inf') if not maximizing else float('inf'), move))
-      except StopIteration:
-        # All children processed; finalize the value for this node
-        if stack:
-          # Pass the result back up the stack
-          stack[-1] = self._update_parent(stack[-1], best_value, best_move)
-        else:
-          # If this is the root node, store the result
-          result = best_move
-
-    print(f"Total nodes: {total_nodes}")
-    return result
-
-  def _update_parent(self, parent: ABNode, child_value: float, child_move: str) -> ABNode:
-    """
-    Updates the given parent with the information from the child.
-
-    :param parent: Parent node to update.
-    :type parent: ABNode
-    :param child_value: Child node value.
-    :type child_value: float
-    :param child_move: Move that led to the child node.
-    :type child_move: str
-    :return: Updated parent node.
-    :rtype: ABNode
-    """
-    # Update the stack frame based on the returned child value
-    node, depth, alpha, beta, maximizing, child_iter, best_value, best_move = parent
+    if depth == 0 or node.gameover:
+      return None, self._evaluate(node)
+    
+    best_move = self._pv_table.get(node_hash, None)
+    children = self._gen_children(node)
+    children.sort(key=lambda x: self._move_order_heuristic(x[0], x[1], best_move, depth), reverse=maximizing)
 
     if maximizing:
-      if child_value > best_value:
-        best_value = child_value
-        best_move = child_move
-      alpha = max(alpha, best_value)
+      max_value = float('-inf')
+      for child, move in children:
+        _, value = self._alpha_beta_search(child, depth - 1, alpha, beta, not maximizing, start_time, time_limit)
+        if max_value < value:
+          max_value = value
+          best_move = move
+        alpha = max(alpha, max_value)
+        if alpha >= beta:
+          self._store_killer_move(depth, move)
+          break # Beta cut-off
+      self._transpos_table[node_hash] = TranspositionTableEntry(TranspositionTableEntryType.EXACT if max_value < beta else TranspositionTableEntryType.LOWER_BOUND, max_value, depth, best_move)
+      if best_move:
+        self._pv_table[node_hash] = best_move
+        self._update_history_heuristic(best_move, depth)
+      return best_move, max_value
     else:
-      best_value = min(best_value, child_value)
-      if child_value < best_value:
-        best_value = child_value
-        best_move = child_move
-      beta = min(beta, best_value)
+      min_value = float('inf')
+      for child, move in children:
+        _, value = self._alpha_beta_search(child, depth - 1, alpha, beta, not maximizing, start_time, time_limit)
+        if min_value > value:
+          min_value = value
+          best_move = move
+        beta = min(beta, min_value)
+        if alpha >= beta:
+          self._store_killer_move(depth, move)
+          break # Alpha cut-off
+      self._transpos_table[node_hash] = TranspositionTableEntry(TranspositionTableEntryType.EXACT if min_value > alpha else TranspositionTableEntryType.UPPER_BOUND, min_value, depth, best_move)
+      if best_move:
+        self._pv_table[node_hash] = best_move
+        self._update_history_heuristic(best_move, depth)
+      return best_move, min_value
 
-    if beta <= alpha:
-      # Clear the iterator to skip remaining children (prune)
-      child_iter: Iterator[tuple[Board, str]] = iter([])
+  def _move_order_heuristic(self, board: Board, move: str, best_move: Optional[str], depth: int) -> tuple[float, int]:
+    """
+    Assigns a heuristic value to moves for ordering.
+    Higher values indicate better moves.
+    """
+    if move == best_move:
+      return (float('inf'), 1) # Prioritize PV move
+    if move in self._killer_moves.get(depth, []):
+      return (float('inf'), 0) # Prioritize killer moves
+    return (self._history_heuristic.get(move, self._evaluate(board)), 0) # Fallback to history heuristic or explicit board evaluation
 
-    return node, depth, alpha, beta, maximizing, child_iter, best_value, best_move
+  def _store_killer_move(self, depth: int, move: str) -> None:
+    """
+    Stores killer moves for a given depth.
+    """
+    if depth not in self._killer_moves:
+      self._killer_moves[depth] = []
+    if move not in self._killer_moves[depth]:
+      if len(self._killer_moves[depth]) >= 3:
+        self._killer_moves[depth].pop(0)
+      self._killer_moves[depth].append(move)
 
-  def evaluate(self, node: Board) -> float:
+  def _update_history_heuristic(self, move: str, depth: int) -> None:
+    """
+    Updates history heuristic table with a move's depth.
+    """
+    self._history_heuristic[move] = self._history_heuristic.get(move, 0) + 2 ** depth
+
+  def _gen_children(self, parent: Board) -> list[tuple[Board, str]]:
+    """
+    Generates valid children from the given parent.
+
+    :param parent: Parent node.
+    :type parent: Board
+    :return: List of children.
+    :rtype: list[tuple[Board, str]]
+    """
+    return [(deepcopy(parent).play(move), move) for move in parent.valid_moves.split(";") if not parent.gameover]
+
+  def _evaluate(self, node: Board) -> float:
     """
     Evaluates the given node.  
     Currently, it's a very naive implementation that weights the winning state (how many pieces surround the enemy queen minus how many pieces surround yours) and the mobility state (amount of your available moves minus the enemy's).
@@ -196,14 +216,3 @@ class AlphaBetaPruner(Brain):
     collision_count_min = node.count_moves_near_queen(minimizing_color)
     
     return (node.count_queen_neighbors(minimizing_color) - node.count_queen_neighbors(maximizing_color)) * 20 + (collision_count_max-collision_count_min) * 20 + (len(valid_moves_maximize) - len(valid_moves_minimize)) // 2
-
-  def gen_children(self, parent: Board) -> Set[tuple[Board, str]]:
-    """
-    Generates valid children from the given parent.
-
-    :param parent: Parent node.
-    :type parent: Board
-    :return: Set of children.
-    :rtype: Set[tuple[Board, str]]
-    """
-    return {(deepcopy(parent).play(move), move) for move in parent.valid_moves.split(";") if not parent.gameover}
