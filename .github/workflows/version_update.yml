@@ -40,7 +40,7 @@ jobs:
         if: steps.check_version.outputs.outcome == 'version_change'
         run: |
           version_input="${{ github.event.inputs.version }}"
-          sed -i 's/^  VERSION: Final\[str\] = ".*"/  VERSION: Final[str] = "$version_input"/' src/engine.py
+          sed -i 's/^  VERSION: Final\[str\] = ".*"/  VERSION: Final[str] = "'$version_input'"/' src/engine.py
           sed -i "s/^release = '.*'/release = '$version_input'/" docs/source/conf.py
       - name: Commit and push changes
         if: steps.check_version.outputs.outcome == 'version_change'
