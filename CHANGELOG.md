@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   * Implemented Zobrist Hash for board states.
   * Moved almost all files.
 - Minor refractors or improvements.
+- Removed executable and pre-built docs from source code. They will be automatically generated for releases in future versions.
 
 ## [v1.2.0] - 2024/11/29
 
