@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.12.7'
           cache: 'pip'
-        run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt
 
       - name: Static Analysis
         run: prospector src
