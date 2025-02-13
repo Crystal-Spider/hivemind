@@ -15,11 +15,11 @@ pylint:
     max-complexity: 15
     max-branches: 15
     max-args: 10
-    max-positional-args: 10
   disable:
     - C0330 # Avoid "bad-continuation" warnings that might be affected by 2-spaces indentation.
     - C0321 # Sometimes rasing an exception in the same line is more readable.
     - R0903 # Classes are allowed to have less than 2 public methods.
+    - R0917 # Don't really care about distinction from arguments and named arguments in the count of total arguments.
 
 pycodestyle:
   disable:

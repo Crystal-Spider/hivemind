@@ -441,15 +441,23 @@ class Board:
       if unlimited_depth or current_depth == depth:
         destinations.add(current)
       if unlimited_depth or current_depth < depth:
-        stack.update(
-          (neighbor, current_depth + 1)
-          for direction in Direction.flat()
-          if (neighbor := self._get_neighbor(current, direction)) not in visited
-            and not self.bugs_from_pos(neighbor)
-            and bool(self.bugs_from_pos((right := self._get_neighbor(current, direction.right_of)))) != bool(self.bugs_from_pos((left := self._get_neighbor(current, direction.left_of))))
-            and right != origin != left
-        )
+        stack.update((neighbor, current_depth + 1) for direction in Direction.flat() if (neighbor := self._get_neighbor(current, direction)) not in visited and not self.bugs_from_pos(neighbor) and self._check_for_door(origin, current, direction))
     return {Move(bug, origin, destination) for destination in destinations if destination != origin}
+
+  def _check_for_door(self, origin: Position, position: Position, direction: Direction) -> bool:
+    """
+    Checks whether a bug piece can slide from origin to position (no door formation).
+
+    :param origin: Initial position of the bug piece.
+    :type origin: Position
+    :param position: Destination position.
+    :type position: Position
+    :param direction: Moving direction.
+    :type direction: Direction
+    :return: Whether a bug piece can slide from origin to position.
+    :rtype: bool
+    """
+    return bool(self.bugs_from_pos((right := self._get_neighbor(position, direction.right_of)))) != bool(self.bugs_from_pos((left := self._get_neighbor(position, direction.left_of)))) and right != origin != left
 
   def _get_beetle_moves(self, bug: Bug, origin: Position, virtual: bool = False) -> Set[Move]:
     """
