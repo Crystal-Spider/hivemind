@@ -66,10 +66,8 @@ Contents
 --------
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    engine
-   board
-   ai
-   game
-   enums
+   core/index
+   ai/index

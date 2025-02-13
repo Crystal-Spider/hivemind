@@ -1,7 +1,7 @@
-Board
-=====
+Zobrist Hash
+============
 
-.. automodule:: board
+.. automodule:: core.hash
    :members:
    :undoc-members:
    :show-inheritance:
