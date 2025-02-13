@@ -1,12 +1,6 @@
-# .prospector.yml
-
 output-format: grouped
 
 strictness: veryhigh
-# tools:
-#   pylint:
-#     enabled: true
-#     profile: custom
 
 pylint:
   options:
@@ -20,9 +14,12 @@ pylint:
     max-attributes: 10
     max-complexity: 15
     max-branches: 15
+    max-args: 10
+    max-positional-args: 10
   disable:
     - C0330 # Avoid "bad-continuation" warnings that might be affected by 2-spaces indentation.
     - C0321 # Sometimes rasing an exception in the same line is more readable.
+    - R0903 # Classes are allowed to have less than 2 public methods.
 
 pycodestyle:
   disable:

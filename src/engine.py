@@ -7,7 +7,7 @@ from core.board import Board
 from core.game import Move
 from ai.brain import Brain, Random, AlphaBetaPruner
 
-class Engine():
+class Engine:
   """
   Game engine.
   """
@@ -27,8 +27,8 @@ class Engine():
   """
 
   BRAINS: Final[dict[Strategy, Callable[[], Brain]]] = {
-    Strategy.RANDOM: lambda: Random(),
-    Strategy.MINMAX: lambda: AlphaBetaPruner()
+    Strategy.RANDOM: Random,
+    Strategy.MINMAX: AlphaBetaPruner
   }
   """
   Map for strategies and the respective brain.

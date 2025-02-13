@@ -2,7 +2,7 @@ import re
 from typing import Final, Optional
 from core.enums import PlayerColor, BugType, Direction
 
-class Position():
+class Position:
   """
   Tile position.
   """
@@ -25,7 +25,7 @@ class Position():
 
   def __sub__(self, other: object):
     return Position(self.q - other.q, self.r - other.r) if isinstance(other, Position) else NotImplemented
-  
+
   def clockwise(self):
     """
     Rotate the position 60 degrees clockwise.
@@ -44,7 +44,7 @@ class Position():
     """
     return Position(self.q + self.r, -self.q)
 
-class Bug():
+class Bug:
   """
   Bug piece.
   """
@@ -88,7 +88,7 @@ class Bug():
   def __eq__(self, value: object) -> bool:
     return self is value or isinstance(value, Bug) and self.color is value.color and self.type is value.type and self.id == value.id
 
-class Move():
+class Move:
   """
   Move.
   """

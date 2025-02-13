@@ -4,7 +4,7 @@ from core.enums import GameType, GameState, PlayerColor, BugType, Direction
 from core.game import Position, Bug, Move
 from core.hash import ZobristHash
 
-class Board():
+class Board:
   """
   Game Board.
   """
@@ -283,19 +283,19 @@ class Board():
     :rtype: int
     """
     valid_moves = self.calculate_valid_moves_for_player(color, True)
-    
+
     collision_count = 0
     for move in valid_moves:
       dest = move.destination
       # Get the neighbouring tiles of the destination
-      neighbours = [self._get_neighbor(dest,direction) for direction in Direction]
+      neighbours = [self._get_neighbor(dest, direction) for direction in Direction]
       # Check if the enemy queen bee is in any of the neighbouring tiles
       for pos in neighbours:
         if pos in self._pos_to_bug:
           for bug in self._pos_to_bug[pos]:
             if bug.color.opposite is color and bug.type is BugType.QUEEN_BEE:
               collision_count += 1
-    
+
     return collision_count
 
   def count_queen_neighbors(self, color: PlayerColor) -> float:
@@ -444,7 +444,10 @@ class Board():
         stack.update(
           (neighbor, current_depth + 1)
           for direction in Direction.flat()
-          if (neighbor := self._get_neighbor(current, direction)) not in visited and not self.bugs_from_pos(neighbor) and bool(self.bugs_from_pos((right := self._get_neighbor(current, direction.right_of)))) != bool(self.bugs_from_pos((left := self._get_neighbor(current, direction.left_of)))) and right != origin != left
+          if (neighbor := self._get_neighbor(current, direction)) not in visited
+            and not self.bugs_from_pos(neighbor)
+            and bool(self.bugs_from_pos((right := self._get_neighbor(current, direction.right_of)))) != bool(self.bugs_from_pos((left := self._get_neighbor(current, direction.left_of))))
+            and right != origin != left
         )
     return {Move(bug, origin, destination) for destination in destinations if destination != origin}
 

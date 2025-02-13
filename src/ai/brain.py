@@ -8,6 +8,10 @@ from core.game import Move
 from core.enums import GameState, PlayerColor
 from ai.table import TranspositionTable, TranspositionTableEntry, TranspositionTableEntryType, ScoreTable
 
+class AlphaBetaFrame:
+  def __init__(self) -> None:
+    pass
+
 class Brain(ABC):
   """
   Base abstract class for AI agents.
@@ -151,23 +155,23 @@ class AlphaBetaPruner(Brain):
         self._pv_table[node_hash] = best_move
         self._update_history_heuristic(best_move, depth)
       return best_move, max_value
-    else:
-      min_value = float('inf')
-      for child, move in children:
-        _, value = self._alpha_beta_search(child, max_branching_factor, depth - 1, alpha, beta, not maximizing, start_time, time_limit)
-        if min_value > value:
-          min_value = value
-          best_move = move
-        beta = min(beta, min_value)
-        if alpha >= beta:
-          self._cutoffs += 1
-          self._store_killer_move(depth, move)
-          break # Alpha cut-off
-      self._transpos_table[node_hash] = TranspositionTableEntry(TranspositionTableEntryType.EXACT if min_value > alpha else TranspositionTableEntryType.UPPER_BOUND, min_value, depth, best_move)
-      if best_move:
-        self._pv_table[node_hash] = best_move
-        self._update_history_heuristic(best_move, depth)
-      return best_move, min_value
+    # minimizing
+    min_value = float('inf')
+    for child, move in children:
+      _, value = self._alpha_beta_search(child, max_branching_factor, depth - 1, alpha, beta, not maximizing, start_time, time_limit)
+      if min_value > value:
+        min_value = value
+        best_move = move
+      beta = min(beta, min_value)
+      if alpha >= beta:
+        self._cutoffs += 1
+        self._store_killer_move(depth, move)
+        break # Alpha cut-off
+    self._transpos_table[node_hash] = TranspositionTableEntry(TranspositionTableEntryType.EXACT if min_value > alpha else TranspositionTableEntryType.UPPER_BOUND, min_value, depth, best_move)
+    if best_move:
+      self._pv_table[node_hash] = best_move
+      self._update_history_heuristic(best_move, depth)
+    return best_move, min_value
 
   def _move_order_heuristic(self, board: Board, move: str, best_move: Optional[str], depth: int) -> tuple[float, int]:
     """
@@ -235,6 +239,6 @@ class AlphaBetaPruner(Brain):
       collision_count_max = node.count_moves_near_queen(PlayerColor.WHITE)
       valid_moves_minimize = node.calculate_valid_moves_for_player(PlayerColor.BLACK)
       collision_count_min = node.count_moves_near_queen(PlayerColor.BLACK)
-      score = (node.count_queen_neighbors(PlayerColor.BLACK) - node.count_queen_neighbors(PlayerColor.WHITE)) * 20 + (collision_count_max-collision_count_min) * 20 + (len(valid_moves_maximize) - len(valid_moves_minimize)) // 2
+      score = (node.count_queen_neighbors(PlayerColor.BLACK) - node.count_queen_neighbors(PlayerColor.WHITE)) * 20 + (collision_count_max - collision_count_min) * 20 + (len(valid_moves_maximize) - len(valid_moves_minimize)) // 2
       self._cached_scores[node_hash] = score
     return score

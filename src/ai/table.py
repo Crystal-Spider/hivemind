@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Optional, Final, Generic, TypeVar, Self
+from typing import Optional, Final, Generic, TypeVar
 from abc import ABC, abstractmethod
 from enum import IntEnum, auto
 
@@ -54,12 +54,6 @@ class AgingTable(ABC, Generic[_Entry, _Value]):
 
   def __eq__(self, other: object):
     return isinstance(other, type(self)) and self._table == other._table
-
-  @abstractmethod
-  def copy(self) -> Self:
-    """
-    Returns a (possibly shallow) copy of this instance.
-    """
 
   @abstractmethod
   def _entry_from_value(self, value: _Value) -> _Entry:
@@ -160,9 +154,9 @@ class TranspositionTableEntry(AgingTableEntry):
   Transposition table entry.
   """
 
-  def __init__(self, type: TranspositionTableEntryType, value: float, depth: int, move: Optional[str]) -> None:
+  def __init__(self, entry_type: TranspositionTableEntryType, value: float, depth: int, move: Optional[str]) -> None:
     super().__init__()
-    self.type: TranspositionTableEntryType = type
+    self.type: TranspositionTableEntryType = entry_type
     self.value: float = value
     self.depth: int = depth
     self.move: Optional[str] = move
@@ -187,11 +181,6 @@ class TranspositionTable(AgingTable[TranspositionTableEntry, TranspositionTableE
 
   def _value_from_entry(self, entry: TranspositionTableEntry) -> TranspositionTableEntry:
     return entry
-
-  def copy(self):
-    table = TranspositionTable(self._max_age, self._max_size)
-    table._table = self._table.copy()
-    return table
 
 class ScoreTableEntry(AgingTableEntry):
   """
@@ -219,8 +208,3 @@ class ScoreTable(AgingTable[ScoreTableEntry, float]):
 
   def _value_from_entry(self, entry: ScoreTableEntry) -> float:
     return entry.score
-
-  def copy(self):
-    table = ScoreTable(self._max_age, self._max_size)
-    table._table = self._table.copy()
-    return table

@@ -23,6 +23,7 @@ jobs:
     secrets: inherit
 
   release:
+    needs: version-validation
     permissions:
       contents: read
       pages: write

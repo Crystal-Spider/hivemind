@@ -222,8 +222,8 @@ class GameType(Flag):
     return GameType.BASE
 
   @property
-  def name(self) -> str | None:
-    return self._name_ and self._name_.title()
+  def tag(self) -> str:
+    return (self.name or "").title()
 
   @property
   def index(self) -> int:
@@ -232,7 +232,7 @@ class GameType(Flag):
     return index
 
   def __str__(self) -> str:
-    return "".join(str(gametype.name) + ("+" if gametype is GameType.BASE and len(self) > 1 else "") for gametype in self)
+    return "".join(gametype.tag + ("+" if gametype is GameType.BASE and len(self) > 1 else "") for gametype in self)
 
 class BugType(StrEnum):
   """
