@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Nothing new.
 
-## [v1.4.0] - 2025/02/13
+## [v1.4.0] - 2025/02/14
 
 - Drastically improved board evaluation for minmax agents.
 - Added `MaxBranchingFactor` engine option, to limit the amount of moves a minmax agent can expand from a single node.
