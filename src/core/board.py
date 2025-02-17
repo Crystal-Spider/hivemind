@@ -103,6 +103,30 @@ class Board:
     return bool(self._bug_to_pos[Bug(self.current_player_color, BugType.QUEEN_BEE)])
 
   @property
+  def current_player_has_won(self) -> bool:
+    """
+    Checks whether the current player has won.
+
+    :param color: Player color.
+    :type color: PlayerColor
+    :return: Whether the current player has won.
+    :rtype: bool
+    """
+    return (self.state is GameState.WHITE_WINS and self.current_player_color is PlayerColor.BLACK) or (self.state is GameState.BLACK_WINS and self.current_player_color is PlayerColor.WHITE)
+
+  @property
+  def current_opponent_has_won(self) -> bool:
+    """
+    Checks whether the current player's opponent has won.
+
+    :param color: Player color.
+    :type color: PlayerColor
+    :return: Whether the current player's opponent has won.
+    :rtype: bool
+    """
+    return (self.state is GameState.WHITE_WINS and self.current_player_color is PlayerColor.WHITE) or (self.state is GameState.BLACK_WINS and self.current_player_color is PlayerColor.BLACK)
+
+  @property
   def gameover(self) -> bool:
     """
     Whether the game is over.

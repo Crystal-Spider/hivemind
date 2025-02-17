@@ -5,7 +5,7 @@ from copy import deepcopy
 from abc import ABC, abstractmethod
 from core.board import Board
 from core.game import Move
-from core.enums import GameState, PlayerColor
+from core.enums import GameState
 from ai.table import TranspositionTable, TranspositionTableEntry, TranspositionTableEntryType, ScoreTable
 
 class AlphaBetaFrame:
@@ -96,13 +96,12 @@ class AlphaBetaPruner(Brain):
 
   def _find_best_move(self, board: Board, max_branching_factor: int, max_depth: int = 0, time_limit: int = 0) -> str:
     start_time = time()
-    maximizing = board.current_player_color is PlayerColor.WHITE
     best_move = None
     scores: list[tuple[Optional[str], float]] = []
     depth = 0
     while not max_depth or depth < max_depth:
       depth += 1
-      best_move, score = self._alpha_beta_search(board, max_branching_factor, depth, float('-inf'), float('inf'), maximizing, start_time, time_limit)
+      best_move, score = self._alpha_beta_search(board, max_branching_factor, depth, float('-inf'), float('inf'), start_time, time_limit)
       scores.append((best_move, score))
       if time_limit and time() - start_time > time_limit:
         break
@@ -112,7 +111,7 @@ class AlphaBetaPruner(Brain):
     self._cutoffs = 0
     return best_move or Move.PASS
 
-  def _alpha_beta_search(self, node: Board, max_branching_factor: int, depth: int, alpha: float, beta: float, maximizing: bool, start_time: float, time_limit: int) -> tuple[Optional[str], float]:
+  def _alpha_beta_search(self, node: Board, max_branching_factor: int, depth: int, alpha: float, beta: float, start_time: float, time_limit: int) -> tuple[Optional[str], float]:
     self._visited_nodes += 1
     node_hash = node.hash()
     cached_entry = self._transpos_table[node_hash]
@@ -134,44 +133,28 @@ class AlphaBetaPruner(Brain):
 
     best_move = self._pv_table.get(node_hash, None)
     children = self._gen_children(node)
-    children.sort(key=lambda x: self._move_order_heuristic(x[0], x[1], best_move, depth), reverse=maximizing)
+    children.sort(key=lambda x: self._move_order_heuristic(x[0], x[1], best_move, depth), reverse=True)
     if len(children) > max_branching_factor:
       del children[max_branching_factor:]
 
-    if maximizing:
-      max_value = float('-inf')
-      for child, move in children:
-        _, value = self._alpha_beta_search(child, max_branching_factor, depth - 1, alpha, beta, not maximizing, start_time, time_limit)
-        if max_value < value:
-          max_value = value
-          best_move = move
-        alpha = max(alpha, max_value)
-        if alpha >= beta:
-          self._cutoffs += 1
-          self._store_killer_move(depth, move)
-          break # Beta cut-off
-      self._transpos_table[node_hash] = TranspositionTableEntry(TranspositionTableEntryType.EXACT if max_value < beta else TranspositionTableEntryType.LOWER_BOUND, max_value, depth, best_move)
-      if best_move:
-        self._pv_table[node_hash] = best_move
-        self._update_history_heuristic(best_move, depth)
-      return best_move, max_value
-    # minimizing
-    min_value = float('inf')
+    best_value = float('-inf')
     for child, move in children:
-      _, value = self._alpha_beta_search(child, max_branching_factor, depth - 1, alpha, beta, not maximizing, start_time, time_limit)
-      if min_value > value:
-        min_value = value
+      _, value = self._alpha_beta_search(child, max_branching_factor, depth - 1, -beta, -alpha, start_time, time_limit)
+      value = -value
+      if value > best_value:
+        best_value = value
         best_move = move
-      beta = min(beta, min_value)
+      alpha = max(alpha, best_value)
       if alpha >= beta:
         self._cutoffs += 1
         self._store_killer_move(depth, move)
-        break # Alpha cut-off
-    self._transpos_table[node_hash] = TranspositionTableEntry(TranspositionTableEntryType.EXACT if min_value > alpha else TranspositionTableEntryType.UPPER_BOUND, min_value, depth, best_move)
+        break # Beta cut-off
+    entry_type = TranspositionTableEntryType.EXACT if best_value < beta else TranspositionTableEntryType.LOWER_BOUND if best_value > alpha else TranspositionTableEntryType.UPPER_BOUND
+    self._transpos_table[node_hash] = TranspositionTableEntry(entry_type, best_value, depth, best_move)
     if best_move:
       self._pv_table[node_hash] = best_move
       self._update_history_heuristic(best_move, depth)
-    return best_move, min_value
+    return best_move, best_value
 
   def _move_order_heuristic(self, board: Board, move: str, best_move: Optional[str], depth: int) -> tuple[float, int]:
     """
@@ -222,23 +205,22 @@ class AlphaBetaPruner(Brain):
     :return: Node value.
     :rtype: float
     """
-
-    match node.state:
-      case GameState.WHITE_WINS:
-        return float('inf')
-      case GameState.BLACK_WINS:
-        return float('-inf')
-      case GameState.DRAW | GameState.NOT_STARTED:
-        return 0
-      case _: pass
+    if (node.state is GameState.DRAW or node.state is GameState.NOT_STARTED):
+      return 0
+    if (node.current_player_has_won):
+      return float('inf')
+    if (node.current_opponent_has_won):
+      return float('-inf')
 
     node_hash = node.hash()
     score = self._cached_scores[node_hash]
     if score is None:
-      valid_moves_maximize = node.calculate_valid_moves_for_player(PlayerColor.WHITE, True)
-      collision_count_max = node.count_moves_near_queen(PlayerColor.WHITE)
-      valid_moves_minimize = node.calculate_valid_moves_for_player(PlayerColor.BLACK)
-      collision_count_min = node.count_moves_near_queen(PlayerColor.BLACK)
-      score = (node.count_queen_neighbors(PlayerColor.BLACK) - node.count_queen_neighbors(PlayerColor.WHITE)) * 20 + (collision_count_max - collision_count_min) * 20 + (len(valid_moves_maximize) - len(valid_moves_minimize)) // 2
+      current_player = node.current_player_color
+      current_opponent = current_player.opposite
+      valid_moves_maximize = node.calculate_valid_moves_for_player(current_player, True)
+      collision_count_max = node.count_moves_near_queen(current_player)
+      valid_moves_minimize = node.calculate_valid_moves_for_player(current_opponent)
+      collision_count_min = node.count_moves_near_queen(current_opponent)
+      score = (node.count_queen_neighbors(current_opponent) - node.count_queen_neighbors(current_player)) * 20 + (collision_count_max - collision_count_min) * 20 + (len(valid_moves_maximize) - len(valid_moves_minimize)) // 2
       self._cached_scores[node_hash] = score
     return score
