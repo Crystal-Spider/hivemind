@@ -11,8 +11,8 @@ class MCTSNode:
     def __init__(self, board: Board, parent: Optional['MCTSNode'] = None, move: Optional[Move] = None):
         self.board = board
         self.parent = parent
-        self.move = move
-        self.children = []
+        self.move: Optional[Move] = move
+        self.children: list[MCTSNode] = []
         self.visits = 0
         self.wins = 0
 
@@ -31,7 +31,7 @@ class MCTSNode:
         untried_moves = [move for move in self.board.calculate_valid_moves_for_player(self.board.current_player_color) if move not in [child.move for child in self.children]]
         move = choice(untried_moves)
         new_board = deepcopy(self.board)
-        new_board.play(move)
+        new_board.play(self.board.stringify_move(move))
         child_node = MCTSNode(new_board, self, move)
         self.children.append(child_node)
         return child_node
@@ -41,7 +41,7 @@ class MCTSNode:
         while current_rollout_board.state == GameState.IN_PROGRESS:
             possible_moves = list(current_rollout_board.calculate_valid_moves_for_player(current_rollout_board.current_player_color))
             move = choice(possible_moves)
-            current_rollout_board.play(move)
+            current_rollout_board.play(self.board.stringify_move(move))
         return current_rollout_board.state
 
     def backpropagate(self, result: GameState):
@@ -71,4 +71,4 @@ class MCTS:
             result = node.rollout()
             node.backpropagate(result)
 
-        return root.best_child(0).move
+        return root.best_child(1.41).move # type: ignore
