@@ -1,7 +1,7 @@
-AI
-======
+Enums
+=====
 
-.. automodule:: ai
+.. automodule:: core.enums
    :members:
    :undoc-members:
    :show-inheritance:

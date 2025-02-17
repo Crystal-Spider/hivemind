@@ -1,5 +1,5 @@
 import pytest
-from enums import PlayerColor, GameState, GameType, Direction
+from core.enums import PlayerColor, GameState, GameType, Direction
 
 class TestPlayerColor():
   def test_code(self):
@@ -49,11 +49,11 @@ class TestGameType():
     with pytest.raises(ValueError):
       GameType.parse("P")
 
-  def test_name(self):
-    assert GameType.BASE.name == "Base"
-    assert GameType.M.name == "M"
-    assert GameType.L.name == "L"
-    assert GameType.P.name == "P"
+  def test_tag(self):
+    assert GameType.BASE.tag == "Base"
+    assert GameType.M.tag == "M"
+    assert GameType.L.tag == "L"
+    assert GameType.P.tag == "P"
 
   def test_str(self):
     assert str(GameType.BASE) == "Base"

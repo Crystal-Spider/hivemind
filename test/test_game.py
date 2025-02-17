@@ -1,6 +1,6 @@
 import pytest
-from enums import PlayerColor, BugType, Direction
-from game import Position, Bug, Move
+from core.enums import PlayerColor, BugType, Direction
+from core.game import Position, Bug, Move
 
 class TestPosition():
   def test_init(self):
@@ -32,6 +32,36 @@ class TestPosition():
     pos3 = Position(4, 6)
     assert pos1 + pos2 == pos3
     assert pos3 - pos2 == pos1
+
+  def test_clockwise(self):
+    initial = Position(2, 1)
+    first = initial.clockwise()
+    second = first.clockwise()
+    third = second.clockwise()
+    fourth = third.clockwise()
+    fifth = fourth.clockwise()
+    sixth = fifth.clockwise()
+    assert first == Position(-1, 3)
+    assert second == Position(-3, 2)
+    assert third == Position(-2, -1)
+    assert fourth == Position(1, -3)
+    assert fifth == Position(3, -2)
+    assert sixth == initial
+  
+  def test_anticlockwise(self):
+    initial = Position(2, 1)
+    first = initial.anticlockwise()
+    second = first.anticlockwise()
+    third = second.anticlockwise()
+    fourth = third.anticlockwise()
+    fifth = fourth.anticlockwise()
+    sixth = fifth.anticlockwise()
+    assert first == Position(3, -2)
+    assert second == Position(1, -3)
+    assert third == Position(-2, -1)
+    assert fourth == Position(-3, 2)
+    assert fifth == Position(-1, 3)
+    assert sixth == initial
 
 class TestBug():
   def test_parse_valid(self):

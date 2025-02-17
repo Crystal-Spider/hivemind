@@ -1,0 +1,53 @@
+name: Version Update Workflow
+
+on:
+  workflow_call:  
+    inputs:
+      version:
+        type: string
+        description: Version number
+        required: true
+
+jobs:
+  version-update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            src/engine.py
+            docs/source/conf.py
+          sparse-checkout-cone-mode: false
+      - name: Check if version has changed
+        id: check_version
+        run: |
+          version_input="${{ github.event.inputs.version }}"
+          current_version=$(grep -oP 'VERSION:\sFinal\[str\]\s=\s"\K[^"]+' src/engine.py)
+          echo "Current version: $current_version"
+          echo "Input version: $version_input"
+          if [ "$version_input" = "$current_version" ]; then
+            echo "Version is already up to date."
+            echo "outcome=no_changes" >> $GITHUB_OUTPUT
+            exit 0
+          else
+            echo "Versions are different."
+            echo "outcome=version_change" >> $GITHUB_OUTPUT
+          fi
+      - name: Update version
+        if: steps.check_version.outputs.outcome == 'version_change'
+        run: |
+          version_input="${{ github.event.inputs.version }}"
+          sed -i 's/^  VERSION: Final\[str\] = ".*"/  VERSION: Final[str] = "'$version_input'"/' src/engine.py
+          sed -i "s/^release = '.*'/release = '$version_input'/" docs/source/conf.py
+      - name: Commit and push changes
+        if: steps.check_version.outputs.outcome == 'version_change'
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@users.noreply.github.com'
+          git add src/engine.py
+          git add docs/source/conf.py
+          git commit -m "Update release version to ${{ github.event.inputs.version }}"
+          git push

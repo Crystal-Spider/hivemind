@@ -1,7 +1,7 @@
 Game utilities
 ==============
 
-.. automodule:: game
+.. automodule:: core.game
    :members:
    :undoc-members:
    :show-inheritance:

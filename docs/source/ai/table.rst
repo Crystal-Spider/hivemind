@@ -1,7 +1,7 @@
-Enums
-=====
+Cache Tables
+============
 
-.. automodule:: enums
+.. automodule:: ai.table
    :members:
    :undoc-members:
    :show-inheritance:

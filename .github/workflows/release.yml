@@ -1,4 +1,4 @@
-name: Release
+name: Release Workflow
 
 on:
   workflow_dispatch:
@@ -12,33 +12,110 @@ on:
         description: Disable version consistency checks
         default: false
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   version-validation:
     permissions:
       contents: read
-    uses: crystal-nest/.github/.github/workflows/version_validation.yml@main
+    uses: ./.github/workflows/version_validation.yml
     with:
       version: ${{ github.event.inputs.version }}
       disable_checks: ${{ github.event.inputs.disable_checks }}
     secrets: inherit
 
-  build:
+  verify:
     needs: version-validation
     permissions:
       contents: read
-    uses: ./.github/workflows/build.yml
+    uses: ./.github/workflows/verify.yml
     secrets: inherit
 
   test:
-    needs: build
+    needs: verify
     permissions:
       contents: read
     uses: ./.github/workflows/test.yml
     secrets: inherit
 
-  verify:
+  version-update:
     needs: test
     permissions:
-      contents: read
-    uses: ./.github/workflows/verify.yml
+      contents: write
+    uses: ./.github/workflows/version_update.yml
+    with:
+      version: ${{ github.event.inputs.version }}
+    secrets: inherit
+
+  release-linux:
+    needs: version-update
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.7'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+
+      - name: Build Release Artifact
+        run: pyinstaller src/engine.py --name HivemindEngine --noconsole --onefile
+
+      - name: Create Release Body
+        id: release_body
+        run: |
+          VERSION_NO_SPACES="${{ github.event.inputs.version }}"
+          VERSION_NO_SPACES="${VERSION_NO_SPACES//./}"
+          DEFAULT_BRANCH=$(git remote show origin | awk '/HEAD branch/ {print $NF}')
+          BODY="See [Changelog](https://github.com/${{ github.repository }}/blob/${DEFAULT_BRANCH}/CHANGELOG.md#v${VERSION_NO_SPACES}---$(date +%Y%m%d))."
+          echo "body=$BODY" >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          body: "${{ env.body }}"
+          files: dist/HivemindEngine*
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: false
+
+  release-windows:
+    needs: release-linux
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.7'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+
+      - name: Build Release Artifact
+        run: pyinstaller src/engine.py --name HivemindEngine --noconsole --onefile
+
+      - name: Add to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          files: dist/HivemindEngine*
+          fail_on_unmatched_files: true
+          draft: false
+
+  docs:
+    needs: release-windows
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs.yml
     secrets: inherit
