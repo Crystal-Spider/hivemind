@@ -3,9 +3,9 @@ from typing import Optional
 from random import choice
 from time import time
 from copy import deepcopy
-from board import Board
-from enums import PlayerColor, GameState
-from board import Move
+from core.board import Board
+from core.enums import PlayerColor, GameState
+from core.board import Move
 
 class MCTSNode:
     def __init__(self, board: Board, parent: Optional['MCTSNode'] = None, move: Optional[Move] = None):
