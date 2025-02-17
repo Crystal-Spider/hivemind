@@ -69,7 +69,7 @@ class Option(StrEnum):
   """
   MAX_BRANCHING_FACTOR = "MaxBranchingFactor"
   """
-  Maximum amount of moves that can be considered for each node by Minmax agents.
+  Maximum amount of moves that can be considered for each node by Negamax agents.
   """
   NUM_THREADS = "NumThreads"
   """
@@ -105,9 +105,9 @@ class Strategy(StrEnum):
   """
   Random strategy.
   """
-  MINMAX = "Minmax"
+  NEGAMAX = "Negamax"
   """
-  Minmax with alpha-beta pruning strategy.
+  Negamax with alpha-beta pruning strategy.
   """
 
 class PlayerColor(StrEnum):

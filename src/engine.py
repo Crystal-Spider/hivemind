@@ -28,16 +28,16 @@ class Engine:
 
   BRAINS: Final[dict[Strategy, Callable[[], Brain]]] = {
     Strategy.RANDOM: Random,
-    Strategy.MINMAX: AlphaBetaPruner
+    Strategy.NEGAMAX: AlphaBetaPruner
   }
   """
   Map for strategies and the respective brain.
   """
-  DEFAULT_STRATEGY_WHITE: Final[Strategy] = Strategy.MINMAX
+  DEFAULT_STRATEGY_WHITE: Final[Strategy] = Strategy.NEGAMAX
   """
   Default value for option StrategyWhite.
   """
-  DEFAULT_STRATEGY_BLACK: Final[Strategy] = Strategy.MINMAX
+  DEFAULT_STRATEGY_BLACK: Final[Strategy] = Strategy.NEGAMAX
   """
   Default value for option StrategyBlack.
   """
