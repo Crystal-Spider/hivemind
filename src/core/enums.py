@@ -109,6 +109,10 @@ class Strategy(StrEnum):
   """
   Minmax with alpha-beta pruning strategy.
   """
+  MCTS = "MCTS"
+  """
+  Monte Carlo Tree Search strategy.
+  """
 
 class PlayerColor(StrEnum):
   """

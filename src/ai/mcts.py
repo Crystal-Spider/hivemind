@@ -6,7 +6,7 @@ from copy import deepcopy
 from core.board import Board
 from core.enums import PlayerColor, GameState
 from core.board import Move
-
+from ai.brain import Brain
 class MCTSNode:
     def __init__(self, board: Board, parent: Optional['MCTSNode'] = None, move: Optional[Move] = None):
         self.board = board
@@ -36,12 +36,14 @@ class MCTSNode:
         self.children.append(child_node)
         return child_node
 
-    def rollout(self) -> GameState:
+    def rollout(self, max_depth: int = 400) -> GameState:
         current_rollout_board = deepcopy(self.board)
-        while current_rollout_board.state == GameState.IN_PROGRESS:
+        depth = 0
+        while current_rollout_board.state == GameState.IN_PROGRESS and depth < max_depth:
             possible_moves = list(current_rollout_board.calculate_valid_moves_for_player(current_rollout_board.current_player_color))
             move = choice(possible_moves)
             current_rollout_board.play(self.board.stringify_move(move))
+            depth += 1
         return current_rollout_board.state
 
     def backpropagate(self, result: GameState):
@@ -53,22 +55,25 @@ class MCTSNode:
         if self.parent:
             self.parent.backpropagate(result)
 
-class MCTS:
-    def __init__(self, board: Board, time_limit: float = 5.0):
-        self.board = board
-        self.time_limit = time_limit
+class MCTS(Brain):
+    def __init__(self):
+        super().__init__()
 
-    def best_move(self) -> Move:
-        root = MCTSNode(self.board)
-        end_time = time() + self.time_limit
-
+    def _find_best_move(self, board: Board, max_branching_factor: int = 0,
+                        max_depth: int = 0, time_limit: int = 0) -> str:
+        end_time = time() + time_limit
+        root = MCTSNode(board)
+        count=0
         while time() < end_time:
             node = root
             while node.is_fully_expanded() and node.children:
-                node = node.best_child()
+                node = node.best_child(exploration_weight=1.41)
             if not node.is_fully_expanded():
                 node = node.expand()
-            result = node.rollout()
+            result = node.rollout(max_depth=max_depth)
             node.backpropagate(result)
+            count+=1
+        print("Partite simulate: ",count)
 
-        return root.best_child(1.41).move # type: ignore
+        best_move = root.best_child(0).move
+        return board.stringify_move(best_move)

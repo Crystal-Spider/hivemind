@@ -6,7 +6,7 @@ from core.enums import Command, Option, OptionType, Strategy, PlayerColor
 from core.board import Board
 from core.game import Move
 from ai.brain import Brain, Random, AlphaBetaPruner
-
+from ai.mcts import MCTS
 class Engine:
   """
   Game engine.
@@ -28,7 +28,8 @@ class Engine:
 
   BRAINS: Final[dict[Strategy, Callable[[], Brain]]] = {
     Strategy.RANDOM: Random,
-    Strategy.MINMAX: AlphaBetaPruner
+    Strategy.MINMAX: AlphaBetaPruner,
+    Strategy.MCTS: MCTS
   }
   """
   Map for strategies and the respective brain.
