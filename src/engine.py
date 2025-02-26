@@ -38,7 +38,7 @@ class Engine:
   """
   Default value for option StrategyWhite.
   """
-  DEFAULT_STRATEGY_BLACK: Final[Strategy] = Strategy.MINMAX
+  DEFAULT_STRATEGY_BLACK: Final[Strategy] = Strategy.MCTS
   """
   Default value for option StrategyBlack.
   """

@@ -19,7 +19,7 @@ class MCTSNode:
     def is_fully_expanded(self) -> bool:
         return len(self.children) == len(self.board.calculate_valid_moves_for_player(self.board.current_player_color))
 
-    def get_ucb(self, child: 'MCTSNode', exploration_weight: float = 1.4) -> float:
+    def get_ucb(self, child: 'MCTSNode', exploration_weight: float = 1.41) -> float:
         q= 1- ((child.wins/child.visits)+1)/2
         return q + exploration_weight * math.sqrt(math.log( self.visits) / child.visits)
 
@@ -73,7 +73,7 @@ class MCTS(Brain):
             result = node.rollout(max_depth=max_depth)
             node.backpropagate(result)
             count+=1
-        print("Partite simulate: ",count)
-
+        print("Simulated games: ",count)
+        
         best_move = root.best_child(0).move
         return board.stringify_move(best_move)
