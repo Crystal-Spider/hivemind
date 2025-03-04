@@ -14,6 +14,9 @@ class Position:
   def __str__(self) -> str:
     return f"({self.q}, {self.r})"
 
+  def __repr__(self):
+    return self.__str__()
+
   def __hash__(self) -> int:
     return hash((self.q, self.r))
 
@@ -82,6 +85,9 @@ class Bug:
   def __str__(self) -> str:
     return f"{self.color.code}{self.type}{self.id if self.id else ""}"
 
+  def __repr__(self):
+    return self.__str__()
+
   def __hash__(self) -> int:
     return hash(str(self))
 
@@ -125,6 +131,9 @@ class Move:
 
   def __str__(self) -> str:
     return f"<{self.origin}, {self.bug}, {self.destination}>"
+
+  def __repr__(self):
+    return self.__str__()
 
   def __hash__(self) -> int:
     return hash((self.bug, self.origin, self.destination))

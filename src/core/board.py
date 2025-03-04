@@ -1,5 +1,5 @@
 import re
-from typing import Final, Optional, Set
+from typing import Final, Optional
 from core.enums import GameType, GameState, PlayerColor, BugType, Direction
 from core.game import Position, Bug, Move
 from core.hash import ZobristHash
@@ -40,7 +40,7 @@ class Board:
     self.turn: int = turn
     self.move_strings: list[str] = []
     self.moves: list[Optional[Move]] = []
-    self._valid_moves_cache: dict[PlayerColor, Optional[Set[Move]]] = {
+    self._valid_moves_cache: dict[PlayerColor, Optional[set[Move]]] = {
       PlayerColor.WHITE: None,
       PlayerColor.BLACK: None
     }
@@ -69,11 +69,15 @@ class Board:
         else:
           self._bug_to_pos[Bug(color, BugType(expansion.name))] = None
     self._bugs: Final[list[Bug]] = list(self._bug_to_pos.keys())
+    self._art_pos: set[Position] = set()
     self._hash: ZobristHash = ZobristHash(self.type)
     self._play_initial_moves(moves)
 
   def __str__(self) -> str:
     return f"{self.type};{self.state};{self.current_player_color}[{self.current_player_turn}]{';' if self.moves else ''}{';'.join(self.move_strings)}"
+
+  def __repr__(self):
+    return self.__str__()
 
   @property
   def current_player_color(self) -> PlayerColor:
@@ -144,16 +148,17 @@ class Board:
     """
     return ";".join([self.stringify_move(move) for move in self.calculate_valid_moves_for_player(self.current_player_color)]) or Move.PASS
 
-  def calculate_valid_moves_for_player(self, color: PlayerColor, force: bool = False) -> Set[Move]:
+  def calculate_valid_moves_for_player(self, color: PlayerColor, force: bool = False) -> set[Move]:
     """
     Calculates the set of valid moves for the current player.
 
-    :return: Set of valid moves.
-    :rtype: Set[Move]
+    :return: set of valid moves.
+    :rtype: set[Move]
     """
     if not self._valid_moves_cache[color] or force:
-      moves: Set[Move] = set()
+      moves: set[Move] = set()
       if self.state is GameState.NOT_STARTED or self.state is GameState.IN_PROGRESS:
+        self._update_cut_pos()
         for bug, pos in self._bug_to_pos.items():
           # Iterate over available pieces of the current player
           if bug.color is color:
@@ -399,6 +404,36 @@ class Board:
     game_type, state, turn, *moves = values
     return GameType.parse(game_type), GameState.parse(state), self._parse_turn(turn), moves
 
+  def _update_cut_pos(self) -> None:
+    if (graph := {pos for pos, bugs in self._pos_to_bug.items() if bugs}):
+      new_art_pos: set[Position] = set()
+      discovery_times: dict[Position, int] = {}
+      low_link_values: dict[Position, int] = {}
+      parents: dict[Position, Optional[Position]] = {}
+      time: list[int] = [0] # Using list for mutability.
+      # Define DFS for Tarjan's algorithm.
+      def dfs(u: Position):
+        discovery_times[u] = low_link_values[u] = time[0]
+        time[0] += 1
+        children = 0
+        for v in [n for d in Direction.flat() if (n := self._get_neighbor(u, d)) in graph]:
+          if v not in discovery_times:
+            parents[v] = u
+            children += 1
+            dfs(v)
+            low_link_values[u] = min(low_link_values[u], low_link_values[v])
+            if parents.get(u) is None and children > 1:
+              new_art_pos.add(u)
+            if parents.get(u) is not None and low_link_values[v] >= discovery_times[u]:
+              new_art_pos.add(u)
+          elif v != parents.get(u):
+            low_link_values[u] = min(low_link_values[u], discovery_times[v])
+      # Run DFS starting from any node, since the graph is connected.
+      dfs(next(iter(graph)))
+      # Update current articulation positions.
+      self._art_pos.clear()
+      self._art_pos.update(new_art_pos)
+
   def _play_initial_moves(self, moves: list[str]) -> None:
     """
     Make initial moves.
@@ -421,14 +456,14 @@ class Board:
     else:
       raise ValueError(f"Expected {self.turn} moves but got {len(moves)}")
 
-  def _get_valid_placements_for_color(self, color: PlayerColor) -> Set[Position]:
+  def _get_valid_placements_for_color(self, color: PlayerColor) -> set[Position]:
     """
     Calculates all valid placements for the current player.
 
     :return: Set of valid positions where new pieces can be placed.
-    :rtype: Set[Position]
+    :rtype: set[Position]
     """
-    placements: Set[Position] = set()
+    placements: set[Position] = set()
     # Iterate over all placed bug pieces of the current player
     for bug, pos in self._bug_to_pos.items():
       if bug.color is color and pos and self._is_bug_on_top(bug):
@@ -442,7 +477,7 @@ class Board:
               placements.add(neighbor)
     return placements
 
-  def _get_sliding_moves(self, bug: Bug, origin: Position, depth: int = 0) -> Set[Move]:
+  def _get_sliding_moves(self, bug: Bug, origin: Position, depth: int = 0) -> set[Move]:
     """
     Calculates the set of valid sliding moves, optionally with a fixed depth.
 
@@ -453,11 +488,11 @@ class Board:
     :param depth: Optional fixed depth of the move, defaults to `0`.
     :type depth: int, optional
     :return: Set of valid sliding moves.
-    :rtype: Set[Move]
+    :rtype: set[Move]
     """
-    destinations: Set[Position] = set()
-    visited: Set[Position] = set()
-    stack: Set[tuple[Position, int]] = {(origin, 0)}
+    destinations: set[Position] = set()
+    visited: set[Position] = set()
+    stack: set[tuple[Position, int]] = {(origin, 0)}
     unlimited_depth = depth == 0
     while stack:
       current, current_depth = stack.pop()
@@ -483,7 +518,7 @@ class Board:
     """
     return bool(self.bugs_from_pos((right := self._get_neighbor(position, direction.right_of)))) != bool(self.bugs_from_pos((left := self._get_neighbor(position, direction.left_of)))) and right != origin != left
 
-  def _get_beetle_moves(self, bug: Bug, origin: Position, virtual: bool = False) -> Set[Move]:
+  def _get_beetle_moves(self, bug: Bug, origin: Position, virtual: bool = False) -> set[Move]:
     """
     Calculates the set of valid moves for a Beetle.
 
@@ -494,9 +529,9 @@ class Board:
     :param virtual: Whether the bug is not at origin, and is just passing by as part of its full move, defaults to `False`.
     :type virtual: bool, optional
     :return: Set of valid Beetle moves.
-    :rtype: Set[Move]
+    :rtype: set[Move]
     """
-    moves: Set[Move] = set()
+    moves: set[Move] = set()
     for direction in Direction.flat():
       # Don't consider the Beetle in the height, unless it's a virtual move (the bug is not actually in origin, but moving at the top of origin is part of its full move).
       height = len(self.bugs_from_pos(origin)) - 1 + virtual
@@ -509,7 +544,7 @@ class Board:
         moves.add(Move(bug, origin, destination))
     return moves
 
-  def _get_grasshopper_moves(self, bug: Bug, origin: Position) -> Set[Move]:
+  def _get_grasshopper_moves(self, bug: Bug, origin: Position) -> set[Move]:
     """
     Calculates the set of valid moves for a Grasshopper.
 
@@ -518,9 +553,9 @@ class Board:
     :param origin: Initial position of the bug piece.
     :type origin: Position
     :return: Set of valid Grasshopper moves.
-    :rtype: Set[Move]
+    :rtype: set[Move]
     """
-    moves: Set[Move] = set()
+    moves: set[Move] = set()
     for direction in Direction.flat():
       destination: Position = self._get_neighbor(origin, direction)
       distance: int = 0
@@ -533,7 +568,7 @@ class Board:
         moves.add(Move(bug, origin, destination))
     return moves
 
-  def _get_mosquito_moves(self, bug: Bug, origin: Position, special_only: bool = False) -> Set[Move]:
+  def _get_mosquito_moves(self, bug: Bug, origin: Position, special_only: bool = False) -> set[Move]:
     """
     Calculates the set of valid Mosquito moves, which copies neighboring bug pieces moves, and can be either normal or special (Pillbug) moves depending on the special_only flag.
 
@@ -544,12 +579,12 @@ class Board:
     :param special_only: Whether to include special moves only, defaults to `False`.
     :type special_only: bool, optional
     :return: Set of valid Mosquito moves.
-    :rtype: Set[Move]
+    :rtype: set[Move]
     """
     if len(self.bugs_from_pos(origin)) > 1:
       return self._get_beetle_moves(bug, origin)
-    moves: Set[Move] = set()
-    bugs_copied: Set[BugType] = set()
+    moves: set[Move] = set()
+    bugs_copied: set[BugType] = set()
     for direction in Direction.flat():
       if (bugs := self.bugs_from_pos(self._get_neighbor(origin, direction))) and (neighbor := bugs[-1]).type not in bugs_copied:
         bugs_copied.add(neighbor.type)
@@ -576,7 +611,7 @@ class Board:
               pass
     return moves
 
-  def _get_ladybug_moves(self, bug: Bug, origin: Position) -> Set[Move]:
+  def _get_ladybug_moves(self, bug: Bug, origin: Position) -> set[Move]:
     """
     Calculates the set of valid moves for a Ladybug.
 
@@ -585,7 +620,7 @@ class Board:
     :param origin: Initial position of the bug piece.
     :type origin: Position
     :return: Set of valid Ladybug moves.
-    :rtype: Set[Move]
+    :rtype: set[Move]
     """
     return {
       Move(bug, origin, final_move.destination)
@@ -594,16 +629,16 @@ class Board:
       for final_move in self._get_beetle_moves(bug, second_move.destination, True) if not self.bugs_from_pos(final_move.destination) and final_move.destination != origin
     }
 
-  def _get_pillbug_special_moves(self, origin: Position) -> Set[Move]:
+  def _get_pillbug_special_moves(self, origin: Position) -> set[Move]:
     """
     Calculates the set of valid special Pillbug moves.
 
     :param origin: Position of the Pillbug.
     :type origin: Position
     :return: Set of valid special Pillbug moves.
-    :rtype: Set[Move]
+    :rtype: set[Move]
     """
-    moves: Set[Move] = set()
+    moves: set[Move] = set()
     # There must be at least one empty neighboring tile for the Pillbug to move another bug piece
     if (empty_positions := [self._get_neighbor(origin, direction) for direction in Direction.flat() if not self.bugs_from_pos(self._get_neighbor(origin, direction))]):
       for direction in Direction.flat():
@@ -622,21 +657,7 @@ class Board:
     :return: Whether a bug piece in the given position can move.
     :rtype: bool
     """
-    # Try gaps heuristic first
-    neighbors: list[list[Bug]] = [self.bugs_from_pos(self._get_neighbor(position, direction)) for direction in Direction.flat()]
-    # If there is more than 1 gap, perform a DFS to check if all neighbors are still connected in some way.
-    if sum(bool(neighbors[i] and not neighbors[i - 1]) for i in range(len(neighbors))) > 1:
-      visited: Set[Position] = set()
-      neighbors_pos: list[Position] = [pos for bugs in neighbors if bugs and (pos := self.pos_from_bug(bugs[-1]))]
-      stack: Set[Position] = {neighbors_pos[0]}
-      while stack:
-        current = stack.pop()
-        visited.add(current)
-        stack.update(neighbor for direction in Direction.flat() if (neighbor := self._get_neighbor(current, direction)) != position and self.bugs_from_pos(neighbor) and neighbor not in visited)
-      # Check if all neighbors with bug pieces were visited
-      return all(neighbor_pos in visited for neighbor_pos in neighbors_pos)
-    # If there is only 1 gap, then all neighboring pieces are connected even without the piece at the given position.
-    return True
+    return position in self._art_pos
 
   def _can_play_on_first_move(self, bug: Bug) -> bool:
     """

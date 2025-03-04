@@ -148,7 +148,7 @@ class AlphaBetaPruner(Brain):
       if alpha >= beta:
         self._cutoffs += 1
         self._store_killer_move(depth, move)
-        break # Beta cut-off
+        break
     entry_type = TranspositionTableEntryType.EXACT if best_value < beta else TranspositionTableEntryType.LOWER_BOUND if best_value > alpha else TranspositionTableEntryType.UPPER_BOUND
     self._transpos_table[node_hash] = TranspositionTableEntry(entry_type, best_value, depth, best_move)
     if best_move:

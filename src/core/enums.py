@@ -234,6 +234,9 @@ class GameType(Flag):
   def __str__(self) -> str:
     return "".join(gametype.tag + ("+" if gametype is GameType.BASE and len(self) > 1 else "") for gametype in self)
 
+  def __repr__(self):
+    return self.__str__()
+
 class BugType(StrEnum):
   """
   Bug type.
@@ -359,6 +362,9 @@ class Direction(StrEnum):
 
   def __str__(self) -> str:
     return self.replace("|", "")
+
+  def __repr__(self):
+    return self.__str__()
 
   @property
   def opposite(self):
