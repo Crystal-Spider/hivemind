@@ -99,12 +99,15 @@ class AlphaBetaPruner(Brain):
     best_move = None
     scores: list[tuple[Optional[str], float]] = []
     depth = 0
-    while not max_depth or depth < max_depth:
-      depth += 1
-      best_move, score = self._alpha_beta_search(board, max_branching_factor, depth, float('-inf'), float('inf'), start_time, time_limit)
-      scores.append((best_move, score))
-      if time_limit and time() - start_time > time_limit:
-        break
+    try:
+      while not max_depth or depth < max_depth:
+        depth += 1
+        best_move, score = self._alpha_beta_search(board, max_branching_factor, depth, float('-inf'), float('inf'), start_time, time_limit)
+        scores.append((best_move, score))
+        if time_limit and time() - start_time > time_limit:
+          break
+    except TimeoutError:
+      pass
     self._transpos_table.flush()
     print(f"Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}")
     self._visited_nodes = 0
@@ -112,6 +115,9 @@ class AlphaBetaPruner(Brain):
     return best_move or Move.PASS
 
   def _alpha_beta_search(self, node: Board, max_branching_factor: int, depth: int, alpha: float, beta: float, start_time: float, time_limit: int) -> tuple[Optional[str], float]:
+    if time_limit and time() - start_time > time_limit:
+      raise TimeoutError("Time limit exceeded during alpha-beta pruning search")
+
     self._visited_nodes += 1
     node_hash = node.hash()
     cached_entry = self._transpos_table[node_hash]

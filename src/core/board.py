@@ -358,7 +358,7 @@ class Board:
     :return: Position of the given bug piece.
     :rtype: Optional[Position]
     """
-    return self._bug_to_pos[bug] if bug in self._bug_to_pos else None
+    return self._bug_to_pos[bug] if bug and bug in self._bug_to_pos else None
 
   def hash(self) -> int:
     """
