@@ -103,7 +103,7 @@ class Move:
   """
   Pass move.
   """
-  REGEX = f"({Bug.REGEX})( ?({"|".join(f"\\{d}" for d in Direction.flat_left())})?({Bug.REGEX})({"|".join(f"\\{d}" for d in Direction.flat_right())})?)?"
+  REGEX = f"({Bug.REGEX})( ?({"|".join(f"\\{d}" for d in Direction.lefts())})?({Bug.REGEX})({"|".join(f"\\{d}" for d in Direction.rights())})?)?"
   """
   MoveString regex.
   """

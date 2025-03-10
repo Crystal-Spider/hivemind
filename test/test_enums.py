@@ -1,7 +1,7 @@
 import pytest
 from core.enums import PlayerColor, GameState, GameType, Direction
 
-class TestPlayerColor():
+class TestPlayerColor:
   def test_code(self):
     assert PlayerColor.WHITE.code == "w"
     assert PlayerColor.BLACK.code == "b"
@@ -10,7 +10,7 @@ class TestPlayerColor():
     assert PlayerColor.WHITE.opposite == PlayerColor.BLACK
     assert PlayerColor.BLACK.opposite == PlayerColor.WHITE
 
-class TestGameState():
+class TestGameState:
   def test_parse(self):
     assert GameState.parse("NotStarted") == GameState.NOT_STARTED
     assert GameState.parse("InProgress") == GameState.IN_PROGRESS
@@ -19,7 +19,7 @@ class TestGameState():
     assert GameState.parse("BlackWins") == GameState.BLACK_WINS
     assert GameState.parse("") == GameState.NOT_STARTED
 
-class TestGameType():
+class TestGameType:
   def test_parse(self):
     assert GameType.parse("") == GameType.BASE
     assert GameType.parse("Base") == GameType.BASE
@@ -73,39 +73,24 @@ class TestGameType():
     assert str(GameType.BASE | GameType.P | GameType.M | GameType.L) == "Base+MLP"
     assert str(GameType.BASE | GameType.P | GameType.L | GameType.M) == "Base+MLP"
 
-class TestDirection():
-  def test_flat(self):
-    directions = Direction.flat()
-    assert Direction.RIGHT in directions
-    assert Direction.UP_RIGHT in directions
-    assert Direction.UP_LEFT in directions
-    assert Direction.LEFT in directions
-    assert Direction.DOWN_LEFT in directions
-    assert Direction.DOWN_RIGHT in directions
-    assert Direction.BELOW not in directions
-    assert Direction.ABOVE not in directions
-
-  def test_flat_left(self):
-    directions = Direction.flat_left()
+class TestDirection:
+  def test_lefts(self):
+    directions = Direction.lefts()
     assert Direction.RIGHT not in directions
     assert Direction.UP_RIGHT not in directions
     assert Direction.UP_LEFT in directions
     assert Direction.LEFT in directions
     assert Direction.DOWN_LEFT in directions
     assert Direction.DOWN_RIGHT not in directions
-    assert Direction.BELOW not in directions
-    assert Direction.ABOVE not in directions
 
-  def test_flat_right(self):
-    directions = Direction.flat_right()
+  def test_rights(self):
+    directions = Direction.rights()
     assert Direction.RIGHT in directions
     assert Direction.UP_RIGHT in directions
     assert Direction.UP_LEFT not in directions
     assert Direction.LEFT not in directions
     assert Direction.DOWN_LEFT not in directions
     assert Direction.DOWN_RIGHT in directions
-    assert Direction.BELOW not in directions
-    assert Direction.ABOVE not in directions
 
   def test_str(self):
     assert str(Direction.RIGHT) == "-"
@@ -114,8 +99,6 @@ class TestDirection():
     assert str(Direction.LEFT) == "-"
     assert str(Direction.DOWN_LEFT) == "/"
     assert str(Direction.DOWN_RIGHT) == "\\"
-    assert str(Direction.BELOW) == ""
-    assert str(Direction.ABOVE) == ""
 
   def test_opposite(self):
     assert Direction.RIGHT.opposite == Direction.LEFT
@@ -124,28 +107,22 @@ class TestDirection():
     assert Direction.LEFT.opposite == Direction.RIGHT
     assert Direction.DOWN_LEFT.opposite == Direction.UP_RIGHT
     assert Direction.DOWN_RIGHT.opposite == Direction.UP_LEFT
-    assert Direction.BELOW.opposite == Direction.ABOVE
-    assert Direction.ABOVE.opposite == Direction.BELOW
 
   def test_left_of(self):
-    assert Direction.RIGHT.left_of == Direction.UP_RIGHT
-    assert Direction.UP_RIGHT.left_of == Direction.UP_LEFT
-    assert Direction.UP_LEFT.left_of == Direction.LEFT
-    assert Direction.LEFT.left_of == Direction.DOWN_LEFT
-    assert Direction.DOWN_LEFT.left_of == Direction.DOWN_RIGHT
-    assert Direction.DOWN_RIGHT.left_of == Direction.RIGHT
-    assert Direction.BELOW.left_of == Direction.BELOW
-    assert Direction.ABOVE.left_of == Direction.ABOVE
+    assert Direction.RIGHT.anticlockwise == Direction.UP_RIGHT
+    assert Direction.UP_RIGHT.anticlockwise == Direction.UP_LEFT
+    assert Direction.UP_LEFT.anticlockwise == Direction.LEFT
+    assert Direction.LEFT.anticlockwise == Direction.DOWN_LEFT
+    assert Direction.DOWN_LEFT.anticlockwise == Direction.DOWN_RIGHT
+    assert Direction.DOWN_RIGHT.anticlockwise == Direction.RIGHT
 
   def test_right_of(self):
-    assert Direction.RIGHT.right_of == Direction.DOWN_RIGHT
-    assert Direction.UP_RIGHT.right_of == Direction.RIGHT
-    assert Direction.UP_LEFT.right_of == Direction.UP_RIGHT
-    assert Direction.LEFT.right_of == Direction.UP_LEFT
-    assert Direction.DOWN_LEFT.right_of == Direction.LEFT
-    assert Direction.DOWN_RIGHT.right_of == Direction.DOWN_LEFT
-    assert Direction.BELOW.right_of == Direction.BELOW
-    assert Direction.ABOVE.right_of == Direction.ABOVE
+    assert Direction.RIGHT.clockwise == Direction.DOWN_RIGHT
+    assert Direction.UP_RIGHT.clockwise == Direction.RIGHT
+    assert Direction.UP_LEFT.clockwise == Direction.UP_RIGHT
+    assert Direction.LEFT.clockwise == Direction.UP_LEFT
+    assert Direction.DOWN_LEFT.clockwise == Direction.LEFT
+    assert Direction.DOWN_RIGHT.clockwise == Direction.DOWN_LEFT
 
   def test_delta_index(self):
     assert Direction.RIGHT.delta_index == 0
@@ -154,8 +131,6 @@ class TestDirection():
     assert Direction.LEFT.delta_index == 3
     assert Direction.DOWN_LEFT.delta_index == 4
     assert Direction.DOWN_RIGHT.delta_index == 5
-    assert Direction.BELOW.delta_index == 6
-    assert Direction.ABOVE.delta_index == 7
 
   def test_is_right(self):
     assert Direction.RIGHT.is_right
@@ -164,8 +139,6 @@ class TestDirection():
     assert not Direction.UP_LEFT.is_right
     assert not Direction.LEFT.is_right
     assert not Direction.DOWN_LEFT.is_right
-    assert not Direction.BELOW.is_right
-    assert not Direction.ABOVE.is_right
 
   def test_is_left(self):
     assert not Direction.RIGHT.is_left
@@ -174,8 +147,6 @@ class TestDirection():
     assert Direction.UP_LEFT.is_left
     assert Direction.LEFT.is_left
     assert Direction.DOWN_LEFT.is_left
-    assert not Direction.BELOW.is_left
-    assert not Direction.ABOVE.is_left
 
 if __name__ == '__main__':
   pytest.main()

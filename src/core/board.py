@@ -1,8 +1,14 @@
 import re
 from typing import Final, Optional
+from dataclasses import dataclass
 from core.enums import GameType, GameState, PlayerColor, BugType, Direction
 from core.game import Position, Bug, Move
 from core.hash import ZobristHash
+
+@dataclass
+class QueenNeighbors:
+  neighbors: set[Position]
+  count: int = 0
 
 class Board:
   """
@@ -13,18 +19,16 @@ class Board:
   """
   Position of the first piece played.
   """
-  NEIGHBOR_DELTAS: Final[tuple[Position, Position, Position, Position, Position, Position, Position, Position]] = (
+  NEIGHBOR_DELTAS: Final[tuple[Position, Position, Position, Position, Position, Position]] = (
     Position(1, 0), # Right
     Position(1, -1), # Up right
     Position(0, -1), # Up left
     Position(-1, 0), # Left
     Position(-1, 1), # Down left
-    Position(0, 1), # Down right
-    Position(0, 0), # Below (no change)
-    Position(0, 0), # Above (no change)
+    Position(0, 1) # Down right
   )
   """
-  Offsets of every neighboring tile in each flat direction.
+  Offsets of every neighboring tile in each direction.
   """
 
   def __init__(self, gamestring: str = "") -> None:
@@ -37,13 +41,11 @@ class Board:
     game_type, state, turn, moves = self._parse_gamestring(gamestring)
     self.type: Final[GameType] = game_type
     self.state: GameState = state
+    self.gameover: bool = self.state is GameState.DRAW or self.state is GameState.WHITE_WINS or self.state is GameState.BLACK_WINS
     self.turn: int = turn
+    self.current_player_color: PlayerColor = PlayerColor.WHITE
     self.move_strings: list[str] = []
     self.moves: list[Optional[Move]] = []
-    self._valid_moves_cache: dict[PlayerColor, Optional[set[Move]]] = {
-      PlayerColor.WHITE: None,
-      PlayerColor.BLACK: None
-    }
     self._pos_to_bug: dict[Position, list[Bug]] = {}
     """
     Map for tile positions on the board and bug pieces placed there (pieces can be stacked).
@@ -71,6 +73,11 @@ class Board:
     self._bugs: Final[list[Bug]] = list(self._bug_to_pos.keys())
     self._art_pos: set[Position] = set()
     self._hash: ZobristHash = ZobristHash(self.type)
+    self._snapshots: dict[int, set[Move]] = {}
+    self._queen_neighbors_by_color: dict[PlayerColor, QueenNeighbors] = {
+      PlayerColor.WHITE: QueenNeighbors(set()),
+      PlayerColor.BLACK: QueenNeighbors(set())
+    }
     self._play_initial_moves(moves)
 
   def __str__(self) -> str:
@@ -78,15 +85,6 @@ class Board:
 
   def __repr__(self):
     return self.__str__()
-
-  @property
-  def current_player_color(self) -> PlayerColor:
-    """
-    Color of the current player.
-
-    :rtype: PlayerColor
-    """
-    return list(PlayerColor)[self.turn % len(PlayerColor)]
 
   @property
   def current_player_turn(self) -> int:
@@ -131,37 +129,28 @@ class Board:
     return (self.state is GameState.WHITE_WINS and self.current_player_color is PlayerColor.WHITE) or (self.state is GameState.BLACK_WINS and self.current_player_color is PlayerColor.BLACK)
 
   @property
-  def gameover(self) -> bool:
-    """
-    Whether the game is over.
-
-    :rtype: bool
-    """
-    return self.state is GameState.DRAW or self.state is GameState.WHITE_WINS or self.state is GameState.BLACK_WINS
-
-  @property
   def valid_moves(self) -> str:
     """
     Current possible legal moves in a joined list of MoveStrings.
 
     :rtype: str
     """
-    return ";".join([self.stringify_move(move) for move in self.calculate_valid_moves_for_player(self.current_player_color)]) or Move.PASS
+    return ";".join([self.stringify_move(move) for move in self.calculate_valid_moves()]) or Move.PASS
 
-  def calculate_valid_moves_for_player(self, color: PlayerColor, force: bool = False) -> set[Move]:
+  def calculate_valid_moves(self) -> set[Move]:
     """
     Calculates the set of valid moves for the current player.
 
     :return: set of valid moves.
     :rtype: set[Move]
     """
-    if not self._valid_moves_cache[color] or force:
+    if not self.hash() in self._snapshots:
       moves: set[Move] = set()
       if self.state is GameState.NOT_STARTED or self.state is GameState.IN_PROGRESS:
         self._update_cut_pos()
         for bug, pos in self._bug_to_pos.items():
           # Iterate over available pieces of the current player
-          if bug.color is color:
+          if bug.color is self.current_player_color:
             # Turn 0 is White player's first turn
             if self.turn == 0:
               if self._can_play_on_first_move(bug):
@@ -171,13 +160,13 @@ class Board:
             elif self.turn == 1:
               if self._can_play_on_first_move(bug):
                 # Add all valid placements for the current bug piece (can be placed only around the first White player's first piece)
-                moves.update(Move(bug, None, self._get_neighbor(Board.ORIGIN, direction)) for direction in Direction.flat())
+                moves.update(Move(bug, None, self._get_neighbor(Board.ORIGIN, direction)) for direction in Direction)
             # Bug piece has not been played yet
             elif not pos:
               # Check for hand placement and queen placement related rules.
               if self._can_bug_be_played(bug) and self._check_queen_placement(bug):
                 # Add all valid placements for the current bug piece
-                moves.update(Move(bug, None, placement) for placement in self._get_valid_placements_for_color(color))
+                moves.update(Move(bug, None, placement) for placement in self._get_valid_placements_for_color())
             # A bug piece in play can move only if it's at the top and its queen is in play and has not been moved in the previous player's turn
             elif self.current_player_queen_in_play and self.bugs_from_pos(pos)[-1] == bug and self._was_not_last_moved(bug):
               # Can't move pieces that would break the hive. Pieces stacked upon other can never break the hive by moving
@@ -208,8 +197,8 @@ class Board:
                     moves.update(self._get_pillbug_special_moves(pos))
                   case _:
                     pass
-      self._valid_moves_cache[color] = moves
-    return self._valid_moves_cache[color] or set()
+      self._snapshots[self.hash()] = moves
+    return self._snapshots[self.hash()] or set()
 
   def play(self, move_string: str):
     """
@@ -219,14 +208,27 @@ class Board:
     :type move_string: str
     :raises ValueError: If the game is over.
     """
-    move = self._parse_move(move_string)
+    return self.play_parsed(self._parse_move(move_string), move_string)
+
+  def play_parsed(self, move: Optional[Move], move_string: Optional[str] = None):
+    """
+    Plays the given move.
+
+    :param move: Move to play.
+    :type move: Optional[Move]
+    :param move_string: MoveString of the move to play.
+    :type move_string: Optional[str]
+    :raises ValueError: If the game is over.
+    """
     if self.state is GameState.NOT_STARTED:
       self.state = GameState.IN_PROGRESS
     if self.state is GameState.IN_PROGRESS:
       self.turn += 1
-      self.move_strings.append(move_string)
+      self.current_player_color = self.current_player_color.opposite
+      if move_string:
+        # Move string will be missing only when this method gets called from a "simulation" of an agent, so we don't really care about updating some stuff, like the history of moves.
+        self.move_strings.append(move_string)
       self.moves.append(move)
-      self._valid_moves_cache[self.current_player_color] = None
       if move:
         self._bug_to_pos[move.bug] = move.destination
         if move.origin:
@@ -235,14 +237,37 @@ class Board:
           self._pos_to_bug[move.destination].append(move.bug)
         else:
           self._pos_to_bug[move.destination] = [move.bug]
-        black_queen_surrounded = self.count_queen_neighbors(PlayerColor.BLACK) == 6
-        white_queen_surrounded = self.count_queen_neighbors(PlayerColor.WHITE) == 6
+
+        if move.bug.type is BugType.QUEEN_BEE:
+          self._queen_neighbors_by_color[move.bug.color].neighbors = set()
+          self._queen_neighbors_by_color[move.bug.color].count = 0
+          for direction in Direction:
+            neighbor = self._get_neighbor(move.destination, direction)
+            self._queen_neighbors_by_color[move.bug.color].neighbors.add(neighbor)
+            self._queen_neighbors_by_color[move.bug.color].count += bool(self.bugs_from_pos(neighbor))
+        else:
+          if len(self.bugs_from_pos(move.destination)) == 1:
+            if move.destination in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
+              self._queen_neighbors_by_color[PlayerColor.WHITE].count += 1
+            elif move.destination in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
+              self._queen_neighbors_by_color[PlayerColor.BLACK].count += 1
+          if move.origin and not self.bugs_from_pos(move.origin):
+            if move.origin in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
+              self._queen_neighbors_by_color[PlayerColor.WHITE].count -= 1
+            elif move.origin in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
+              self._queen_neighbors_by_color[PlayerColor.BLACK].count -= 1
+
+        white_queen_surrounded = self._queen_neighbors_by_color[PlayerColor.WHITE].count == 6
+        black_queen_surrounded = self._queen_neighbors_by_color[PlayerColor.BLACK].count == 6
         if black_queen_surrounded and white_queen_surrounded:
           self.state = GameState.DRAW
+          self.gameover = True
         elif black_queen_surrounded:
           self.state = GameState.WHITE_WINS
+          self.gameover = True
         elif white_queen_surrounded:
           self.state = GameState.BLACK_WINS
+          self.gameover = True
       self._update_hash()
       return self
     raise ValueError(f"You can't {"play" if move else Move.PASS} when the game is over")
@@ -260,17 +285,38 @@ class Board:
       if len(self.moves) >= amount:
         if self.state is not GameState.IN_PROGRESS:
           self.state = GameState.IN_PROGRESS
+          self.gameover = False
         for _ in range(amount):
           self.turn -= 1
+          self.current_player_color = self.current_player_color.opposite
           self._update_hash()
-          self._valid_moves_cache[self.current_player_color] = None
-          self.move_strings.pop()
+          if self.move_strings:
+            # Move string history might not be available when this method gets called from a "simulation" of an agent.
+            self.move_strings.pop()
           move = self.moves.pop()
           if move:
             self._pos_to_bug[move.destination].pop()
             self._bug_to_pos[move.bug] = move.origin
             if move.origin:
               self._pos_to_bug[move.origin].append(move.bug)
+            if move.bug.type is BugType.QUEEN_BEE:
+              self._queen_neighbors_by_color[move.bug.color].neighbors = set()
+              self._queen_neighbors_by_color[move.bug.color].count = 0
+              for direction in Direction:
+                neighbor = self._get_neighbor(move.destination, direction)
+                self._queen_neighbors_by_color[move.bug.color].neighbors.add(neighbor)
+                self._queen_neighbors_by_color[move.bug.color].count += bool(self.bugs_from_pos(neighbor))
+            else:
+              if not self.bugs_from_pos(move.destination):
+                if move.destination in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
+                  self._queen_neighbors_by_color[PlayerColor.WHITE].count -= 1
+                elif move.destination in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
+                  self._queen_neighbors_by_color[PlayerColor.BLACK].count -= 1
+              if move.origin and len(self.bugs_from_pos(move.origin)) == 1:
+                if move.origin in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
+                  self._queen_neighbors_by_color[PlayerColor.WHITE].count += 1
+                elif move.origin in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
+                  self._queen_neighbors_by_color[PlayerColor.BLACK].count += 1
         if self.turn == 0:
           self.state = GameState.NOT_STARTED
       else:
@@ -294,7 +340,7 @@ class Board:
       if (dest_bugs := self.bugs_from_pos(move.destination)):
         relative = dest_bugs[-1]
       else:
-        for neighbor_dir in Direction.flat():
+        for neighbor_dir in Direction:
           if (neighbor_bugs := self.bugs_from_pos(self._get_neighbor(move.destination, neighbor_dir))) and (neighbor_bug := neighbor_bugs[0]) != moved:
             relative = neighbor_bug
             direction = neighbor_dir.opposite
@@ -302,41 +348,8 @@ class Board:
       return Move.stringify(moved, relative, direction)
     return Move.PASS
 
-  def count_moves_near_queen(self, color: PlayerColor) -> int:
-    """
-    Returns the number of available moves that reach the neighboring tiles of the enemy queen bee.
-
-    :param color: Player's color.
-    :type color: PlayerColor
-    :return: Number of moves that reach the enemy queen bee.
-    :rtype: int
-    """
-    valid_moves = self.calculate_valid_moves_for_player(color, True)
-
-    collision_count = 0
-    for move in valid_moves:
-      dest = move.destination
-      # Get the neighbouring tiles of the destination
-      neighbours = [self._get_neighbor(dest, direction) for direction in Direction]
-      # Check if the enemy queen bee is in any of the neighbouring tiles
-      for pos in neighbours:
-        if pos in self._pos_to_bug:
-          for bug in self._pos_to_bug[pos]:
-            if bug.color.opposite is color and bug.type is BugType.QUEEN_BEE:
-              collision_count += 1
-
-    return collision_count
-
-  def count_queen_neighbors(self, color: PlayerColor) -> float:
-    """
-    Checks whether the specified player's queen is surrounded.
-
-    :param color: Player's color.
-    :type color: PlayerColor
-    :return: Whether the specified player's queen is surrounded.
-    :rtype: bool
-    """
-    return sum(bool(self.bugs_from_pos(self._get_neighbor(queen_pos, direction))) for direction in Direction.flat()) if (queen_pos := self._bug_to_pos[Bug(color, BugType.QUEEN_BEE)]) else 0
+  def queen_neighbors_by_color(self, color: PlayerColor) -> int:
+    return self._queen_neighbors_by_color[color].count
 
   def bugs_from_pos(self, position: Position) -> list[Bug]:
     """
@@ -347,7 +360,7 @@ class Board:
     :return: The list of bug pieces at the given position.
     :rtype: list[Bug]
     """
-    return self._pos_to_bug[position] if position in self._pos_to_bug else []
+    return self._pos_to_bug.get(position, [])
 
   def pos_from_bug(self, bug: Optional[Bug]) -> Optional[Position]:
     """
@@ -358,7 +371,7 @@ class Board:
     :return: Position of the given bug piece.
     :rtype: Optional[Position]
     """
-    return self._bug_to_pos[bug] if bug and bug in self._bug_to_pos else None
+    return self._bug_to_pos.get(bug, None) if bug else None
 
   def hash(self) -> int:
     """
@@ -416,7 +429,7 @@ class Board:
         discovery_times[u] = low_link_values[u] = time[0]
         time[0] += 1
         children = 0
-        for v in [n for d in Direction.flat() if (n := self._get_neighbor(u, d)) in graph]:
+        for v in [n for d in Direction if (n := self._get_neighbor(u, d)) in graph]:
           if v not in discovery_times:
             parents[v] = u
             children += 1
@@ -456,7 +469,7 @@ class Board:
     else:
       raise ValueError(f"Expected {self.turn} moves but got {len(moves)}")
 
-  def _get_valid_placements_for_color(self, color: PlayerColor) -> set[Position]:
+  def _get_valid_placements_for_color(self) -> set[Position]:
     """
     Calculates all valid placements for the current player.
 
@@ -466,14 +479,14 @@ class Board:
     placements: set[Position] = set()
     # Iterate over all placed bug pieces of the current player
     for bug, pos in self._bug_to_pos.items():
-      if bug.color is color and pos and self._is_bug_on_top(bug):
+      if pos and bug.color is self.current_player_color and self.bugs_from_pos(pos)[-1] == bug:
         # Iterate over all neighbors of the current bug piece
-        for direction in Direction.flat():
+        for direction in Direction:
           neighbor = self._get_neighbor(pos, direction)
           # If the neighboring tile is empty
           if not self.bugs_from_pos(neighbor):
             # If all neighbor's neighbors are empty or of the same color, add the neighbor as a valid placement
-            if all(not self.bugs_from_pos(self._get_neighbor(neighbor, dir)) or self.bugs_from_pos(self._get_neighbor(neighbor, dir))[-1].color is color for dir in Direction.flat() if dir is not direction.opposite):
+            if all(not self.bugs_from_pos(self._get_neighbor(neighbor, dir)) or self.bugs_from_pos(self._get_neighbor(neighbor, dir))[-1].color is self.current_player_color for dir in Direction if dir is not direction.opposite):
               placements.add(neighbor)
     return placements
 
@@ -500,7 +513,7 @@ class Board:
       if unlimited_depth or current_depth == depth:
         destinations.add(current)
       if unlimited_depth or current_depth < depth:
-        stack.update((neighbor, current_depth + 1) for direction in Direction.flat() if (neighbor := self._get_neighbor(current, direction)) not in visited and not self.bugs_from_pos(neighbor) and self._check_for_door(origin, current, direction))
+        stack.update((neighbor, current_depth + 1) for direction in Direction if (neighbor := self._get_neighbor(current, direction)) not in visited and not self.bugs_from_pos(neighbor) and self._check_for_door(origin, current, direction))
     return {Move(bug, origin, destination) for destination in destinations if destination != origin}
 
   def _check_for_door(self, origin: Position, position: Position, direction: Direction) -> bool:
@@ -516,7 +529,7 @@ class Board:
     :return: Whether a bug piece can slide from origin to position.
     :rtype: bool
     """
-    return bool(self.bugs_from_pos((right := self._get_neighbor(position, direction.right_of)))) != bool(self.bugs_from_pos((left := self._get_neighbor(position, direction.left_of)))) and right != origin != left
+    return bool(self.bugs_from_pos((right := self._get_neighbor(position, direction.clockwise)))) != bool(self.bugs_from_pos((left := self._get_neighbor(position, direction.anticlockwise)))) and right != origin != left
 
   def _get_beetle_moves(self, bug: Bug, origin: Position, virtual: bool = False) -> set[Move]:
     """
@@ -532,13 +545,13 @@ class Board:
     :rtype: set[Move]
     """
     moves: set[Move] = set()
-    for direction in Direction.flat():
+    for direction in Direction:
       # Don't consider the Beetle in the height, unless it's a virtual move (the bug is not actually in origin, but moving at the top of origin is part of its full move).
       height = len(self.bugs_from_pos(origin)) - 1 + virtual
       destination = self._get_neighbor(origin, direction)
       dest_height = len(self.bugs_from_pos(destination))
-      left_height = len(self.bugs_from_pos(self._get_neighbor(origin, direction.left_of)))
-      right_height = len(self.bugs_from_pos(self._get_neighbor(origin, direction.right_of)))
+      left_height = len(self.bugs_from_pos(self._get_neighbor(origin, direction.anticlockwise)))
+      right_height = len(self.bugs_from_pos(self._get_neighbor(origin, direction.clockwise)))
       # Logic from http://boardgamegeek.com/wiki/page/Hive_FAQ#toc9
       if not ((height == 0 and dest_height == 0 and left_height == 0 and right_height == 0) or (dest_height < left_height and dest_height < right_height and height < left_height and height < right_height)):
         moves.add(Move(bug, origin, destination))
@@ -556,7 +569,7 @@ class Board:
     :rtype: set[Move]
     """
     moves: set[Move] = set()
-    for direction in Direction.flat():
+    for direction in Direction:
       destination: Position = self._get_neighbor(origin, direction)
       distance: int = 0
       while self.bugs_from_pos(destination):
@@ -585,7 +598,7 @@ class Board:
       return self._get_beetle_moves(bug, origin)
     moves: set[Move] = set()
     bugs_copied: set[BugType] = set()
-    for direction in Direction.flat():
+    for direction in Direction:
       if (bugs := self.bugs_from_pos(self._get_neighbor(origin, direction))) and (neighbor := bugs[-1]).type not in bugs_copied:
         bugs_copied.add(neighbor.type)
         if special_only:
@@ -640,8 +653,8 @@ class Board:
     """
     moves: set[Move] = set()
     # There must be at least one empty neighboring tile for the Pillbug to move another bug piece
-    if (empty_positions := [self._get_neighbor(origin, direction) for direction in Direction.flat() if not self.bugs_from_pos(self._get_neighbor(origin, direction))]):
-      for direction in Direction.flat():
+    if (empty_positions := [self._get_neighbor(origin, direction) for direction in Direction if not self.bugs_from_pos(self._get_neighbor(origin, direction))]):
+      for direction in Direction:
         position = self._get_neighbor(origin, direction)
         # A Pillbug can move another bug piece only if it's not stacked, it's not the last moved piece, it can be moved without breaking the hive, and it's not obstructed in moving above the Pillbug itself
         if len(bugs := self.bugs_from_pos(position)) == 1 and self._was_not_last_moved(neighbor := bugs[-1]) and self._can_move_without_breaking_hive(position) and Move(neighbor, position, origin) in self._get_beetle_moves(neighbor, position):
@@ -657,7 +670,7 @@ class Board:
     :return: Whether a bug piece in the given position can move.
     :rtype: bool
     """
-    return position in self._art_pos
+    return position not in self._art_pos
 
   def _can_play_on_first_move(self, bug: Bug) -> bool:
     """
@@ -718,7 +731,7 @@ class Board:
     :rtype: Optional[Move]
     """
     if move_string == Move.PASS:
-      if not self.calculate_valid_moves_for_player(self.current_player_color):
+      if not self.calculate_valid_moves():
         return None
       raise ValueError("You can't pass when you have valid moves")
     if (match := re.fullmatch(Move.REGEX, move_string)):
@@ -726,24 +739,13 @@ class Board:
       if not left_dir or not right_dir:
         moved = Bug.parse(bug_string_1)
         if (relative_pos := self.pos_from_bug(Bug.parse(bug_string_2)) if bug_string_2 else Board.ORIGIN):
-          move = Move(moved, self.pos_from_bug(moved), self._get_neighbor(relative_pos, Direction(f"{left_dir}|") if left_dir else Direction(f"|{right_dir or ""}")))
-          if move in self.calculate_valid_moves_for_player(self.current_player_color):
+          move = Move(moved, self.pos_from_bug(moved), self._get_neighbor(relative_pos, Direction(f"{left_dir or ''}|{right_dir or ''}")) if (left_dir or right_dir) else relative_pos)
+          if move in self.calculate_valid_moves():
             return move
           raise ValueError(f"'{move_string}' is not a valid move for the current board state")
         raise ValueError(f"'{bug_string_2}' has not been played yet")
       raise ValueError("Only one direction at a time can be specified")
     raise ValueError(f"'{move_string}' is not a valid MoveString")
-
-  def _is_bug_on_top(self, bug: Bug) -> bool:
-    """
-    Checks if the given bug has been played and is at the top of the stack.
-
-    :param bug: Bug piece.
-    :type bug: Bug
-    :return: Whether the bug is at the top.
-    :rtype: bool
-    """
-    return (pos := self.pos_from_bug(bug)) is not None and self.bugs_from_pos(pos)[-1] == bug
 
   def _get_neighbor(self, position: Position, direction: Direction) -> Position:
     """

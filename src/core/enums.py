@@ -1,3 +1,4 @@
+from typing import Final
 from enum import StrEnum, Flag, auto
 from functools import reduce
 
@@ -139,7 +140,7 @@ class PlayerColor(StrEnum):
 
     :rtype: PlayerColor
     """
-    return PlayerColor.BLACK if self is PlayerColor.WHITE else PlayerColor.WHITE
+    return _EnumUtils.PLAYER_COLOR_OPPOSITES[self]
 
 class GameState(StrEnum):
   """
@@ -321,44 +322,26 @@ class Direction(StrEnum):
   """
   Down right side of the hex: bug\\
   """
-  BELOW = ""
-  """
-  Below of the hex: described by another of the other direction indications.
-  """
-  ABOVE = "|"
-  """
-  Above of the hex: bug
-  """
 
   @classmethod
-  def flat(cls):
+  def lefts(cls):
     """
-    Returns all flat directions (no directions to move up or down a plane). 
+    Returns all left directions. 
 
-    :return: List of flat directions.
+    :return: List of left directions.
     :rtype: list[Direction]
     """
-    return [direction for direction in Direction if direction is not Direction.ABOVE and direction is not Direction.BELOW]
+    return _EnumUtils.DIRECTION_LEFTS
 
   @classmethod
-  def flat_left(cls):
+  def rights(cls):
     """
-    Returns all flat left directions. 
+    Returns all right directions. 
 
-    :return: List of flat left directions.
+    :return: List of right directions.
     :rtype: list[Direction]
     """
-    return [direction for direction in Direction if direction.is_left]
-
-  @classmethod
-  def flat_right(cls):
-    """
-    Returns all flat right directions. 
-
-    :return: List of flat right directions.
-    :rtype: list[Direction]
-    """
-    return [direction for direction in Direction if direction.is_right]
+    return _EnumUtils.DIRECTION_RIGHTS
 
   def __str__(self) -> str:
     return self.replace("|", "")
@@ -373,37 +356,25 @@ class Direction(StrEnum):
 
     :rtype: Direction
     """
-    match self:
-      case Direction.BELOW | Direction.ABOVE:
-        return list(Direction)[(self.delta_index - 5) % 2 + 6]
-      case _:
-        return list(Direction)[(self.delta_index + 3) % 6]
+    return _EnumUtils.DIRECTION_OPPOSITES[self]
 
   @property
-  def left_of(self):
+  def clockwise(self):
     """
-    Direction to the left.
+    Direction to the right (clockwise).
 
     :rtype: Direction
     """
-    match self:
-      case Direction.BELOW | Direction.ABOVE:
-        return self
-      case _:
-        return list(Direction)[(self.delta_index + 1) % 6]
+    return _EnumUtils.DIRECTION_CLOCKWISES[self]
 
   @property
-  def right_of(self):
+  def anticlockwise(self):
     """
-    Direction to the right.
+    Direction to the left (anticlockwise).
 
     :rtype: Direction
     """
-    match self:
-      case Direction.BELOW | Direction.ABOVE:
-        return self
-      case _:
-        return list(Direction)[(self.delta_index + 5) % 6]
+    return _EnumUtils.DIRECTION_ANTICLOCKWISES[self]
 
   @property
   def delta_index(self) -> int:
@@ -412,7 +383,7 @@ class Direction(StrEnum):
 
     :rtype: int
     """
-    return list(Direction).index(self)
+    return _EnumUtils.DIRECTION_DELTA_INDICES[self]
 
   @property
   def is_right(self) -> bool:
@@ -421,7 +392,7 @@ class Direction(StrEnum):
 
     :rtype: bool
     """
-    return self is Direction.RIGHT or self is Direction.UP_RIGHT or self is Direction.DOWN_RIGHT
+    return self in Direction.rights()
 
   @property
   def is_left(self) -> bool:
@@ -430,4 +401,38 @@ class Direction(StrEnum):
 
     :rtype: bool
     """
-    return self is Direction.LEFT or self is Direction.UP_LEFT or self is Direction.DOWN_LEFT
+    return self in Direction.lefts()
+
+class _EnumUtils:
+  """
+  Internal utility class to make some enum methods and properties run in constant time.
+  """
+
+  PLAYER_COLOR_OPPOSITES: Final[dict[PlayerColor, PlayerColor]] = {color: PlayerColor.BLACK if color is PlayerColor.WHITE else PlayerColor.WHITE for color in PlayerColor}
+  """
+  Map of player colors to their opposite.
+  """
+  DIRECTION_LEFTS: Final[list[Direction]] = [direction for direction in Direction if direction is Direction.LEFT or direction is Direction.UP_LEFT or direction is Direction.DOWN_LEFT]
+  """
+  List of left directions.
+  """
+  DIRECTION_RIGHTS: Final[list[Direction]] = [direction for direction in Direction if direction is Direction.RIGHT or direction is Direction.UP_RIGHT or direction is Direction.DOWN_RIGHT]
+  """
+  List of right directions.
+  """
+  DIRECTION_DELTA_INDICES: Final[dict[Direction, int]] = {direction: list(Direction).index(direction) for direction in Direction}
+  """
+  Map of directions to their indices.
+  """
+  DIRECTION_OPPOSITES: Final[dict[Direction, Direction]] = {direction: list(Direction)[(list(Direction).index(direction) + 3) % 6] for direction in list(Direction)}
+  """
+  Map of directions to their opposite.
+  """
+  DIRECTION_CLOCKWISES: Final[dict[Direction, Direction]] = {direction: list(Direction)[(list(Direction).index(direction) + 5) % 6] for direction in list(Direction)}
+  """
+  Map of directions to their clockwise (right) neighboring direction.
+  """
+  DIRECTION_ANTICLOCKWISES: Final[dict[Direction, Direction]] = {direction: list(Direction)[(list(Direction).index(direction) + 1) % 6] for direction in list(Direction)}
+  """
+  Map of directions to their anitclockwise (left) neighboring direction.
+  """

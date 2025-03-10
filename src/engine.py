@@ -6,6 +6,7 @@ from core.enums import Command, Option, OptionType, Strategy, PlayerColor
 from core.board import Board
 from core.game import Move
 from ai.brain import Brain, Random, AlphaBetaPruner
+# import cProfile
 
 class Engine:
   """
@@ -80,7 +81,7 @@ class Engine:
     self.board: Optional[Board] = None
 
   def __getitem__(self, attr: str):
-    return self.__dict__[attr] if attr in self.__dict__ else type(self).__dict__[attr]
+    return self.__dict__.get(attr, type(self).__dict__[attr])
 
   def __setitem__(self, attr: str, value: Any):
     self.__dict__[attr] = value
@@ -363,3 +364,6 @@ class Engine:
 
 if __name__ == "__main__":
   Engine().start()
+  # e = Engine()
+  # e.newgame(["Base+MLP"])
+  # cProfile.run("e.bestmove('depth', '7')")

@@ -2,7 +2,7 @@ import pytest
 from core.enums import PlayerColor, BugType, Direction
 from core.game import Position, Bug, Move
 
-class TestPosition():
+class TestPosition:
   def test_init(self):
     pos = Position(1, 2)
     assert pos.q == 1
@@ -63,7 +63,7 @@ class TestPosition():
     assert fifth == Position(-1, 3)
     assert sixth == initial
 
-class TestBug():
+class TestBug:
   def test_parse_valid(self):
     bug = Bug.parse("wQ")
     assert bug.color == PlayerColor.WHITE
@@ -100,7 +100,7 @@ class TestBug():
     assert bug1 == bug2
     assert bug1 != bug3
 
-class TestMove():
+class TestMove:
   def test_stringify(self):
     bug1 = Bug(PlayerColor.WHITE, BugType.SPIDER, 1)
     move_str = Move.stringify(bug1)

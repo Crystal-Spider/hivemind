@@ -1,7 +1,6 @@
 from typing import Optional
 from random import choice
 from time import sleep, time
-from copy import deepcopy
 from abc import ABC, abstractmethod
 from core.board import Board
 from core.game import Move
@@ -87,9 +86,9 @@ class AlphaBetaPruner(Brain):
   def __init__(self) -> None:
     super().__init__()
     self._transpos_table: TranspositionTable = TranspositionTable()
-    self._pv_table: dict[int, str] = {}
-    self._killer_moves: dict[int, list[str]] = {}
-    self._history_heuristic: dict[str, int] = {}
+    self._pv_table: dict[int, Move] = {}
+    self._killer_moves: dict[int, list[Move]] = {}
+    self._history_heuristic: dict[Move, int] = {}
     self._cached_scores: ScoreTable = ScoreTable()
     self._visited_nodes: int = 0
     self._cutoffs: int = 0
@@ -97,7 +96,7 @@ class AlphaBetaPruner(Brain):
   def _find_best_move(self, board: Board, max_branching_factor: int, max_depth: int = 0, time_limit: int = 0) -> str:
     start_time = time()
     best_move = None
-    scores: list[tuple[Optional[str], float]] = []
+    scores: list[tuple[Optional[Move], float]] = []
     depth = 0
     try:
       while not max_depth or depth < max_depth:
@@ -109,17 +108,17 @@ class AlphaBetaPruner(Brain):
     except TimeoutError:
       pass
     self._transpos_table.flush()
-    print(f"Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}")
+    print(f"Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}; Time: {time() - start_time}")
     self._visited_nodes = 0
     self._cutoffs = 0
-    return best_move or Move.PASS
+    return board.stringify_move(best_move)
 
-  def _alpha_beta_search(self, node: Board, max_branching_factor: int, depth: int, alpha: float, beta: float, start_time: float, time_limit: int) -> tuple[Optional[str], float]:
+  def _alpha_beta_search(self, board: Board, max_branching_factor: int, depth: int, alpha: float, beta: float, start_time: float, time_limit: int) -> tuple[Optional[Move], float]:
     if time_limit and time() - start_time > time_limit:
       raise TimeoutError("Time limit exceeded during alpha-beta pruning search")
 
     self._visited_nodes += 1
-    node_hash = node.hash()
+    node_hash = board.hash()
     cached_entry = self._transpos_table[node_hash]
     if cached_entry and cached_entry.depth >= depth:
       match cached_entry.type:
@@ -134,18 +133,20 @@ class AlphaBetaPruner(Brain):
         self._cutoffs += 1
         return cached_entry.move, cached_entry.value
 
-    if depth == 0 or node.gameover:
-      return None, self._evaluate(node)
+    if depth == 0 or board.gameover:
+      return None, self._evaluate(board, None)
 
     best_move = self._pv_table.get(node_hash, None)
-    children = self._gen_children(node)
-    children.sort(key=lambda x: self._move_order_heuristic(x[0], x[1], best_move, depth), reverse=True)
-    if len(children) > max_branching_factor:
-      del children[max_branching_factor:]
+    moves = list(board.calculate_valid_moves())
+    moves.sort(key=lambda m: self._move_order_heuristic(board, m, best_move, depth), reverse=True)
+    if len(moves) > max_branching_factor:
+      del moves[max_branching_factor:]
 
     best_value = float('-inf')
-    for child, move in children:
-      _, value = self._alpha_beta_search(child, max_branching_factor, depth - 1, -beta, -alpha, start_time, time_limit)
+    for move in moves:
+      board.play_parsed(move)
+      _, value = self._alpha_beta_search(board, max_branching_factor, depth - 1, -beta, -alpha, start_time, time_limit)
+      board.undo()
       value = -value
       if value > best_value:
         best_value = value
@@ -162,18 +163,18 @@ class AlphaBetaPruner(Brain):
       self._update_history_heuristic(best_move, depth)
     return best_move, best_value
 
-  def _move_order_heuristic(self, board: Board, move: str, best_move: Optional[str], depth: int) -> tuple[float, int]:
+  def _move_order_heuristic(self, board: Board, move: Move, best_move: Optional[Move], depth: int) -> tuple[float, int]:
     """
     Assigns a heuristic value to moves for ordering.  
     Higher values indicate better moves.
     """
     if move == best_move:
-      return (float('inf'), 1) # Prioritize PV move
+      return (float('inf'), 1) # Prioritize PV move.
     if move in self._killer_moves.get(depth, []):
-      return (float('inf'), 0) # Prioritize killer moves
-    return (self._history_heuristic.get(move, self._evaluate(board)), 0) # Fallback to history heuristic or explicit board evaluation
+      return (float('inf'), 0) # Prioritize killer moves.
+    return (self._history_heuristic.get(move, self._evaluate(board, move)), 0) # Fallback to history heuristic or explicit board evaluation.
 
-  def _store_killer_move(self, depth: int, move: str) -> None:
+  def _store_killer_move(self, depth: int, move: Move) -> None:
     """
     Stores killer moves for a given depth.
     """
@@ -184,24 +185,18 @@ class AlphaBetaPruner(Brain):
         self._killer_moves[depth].pop(0)
       self._killer_moves[depth].append(move)
 
-  def _update_history_heuristic(self, move: str, depth: int) -> None:
+  def _update_history_heuristic(self, move: Move, depth: int) -> None:
     """
     Updates history heuristic table with a move's depth.
+
+    :param move: Move.
+    :type move: Move
+    :param depth: Depth.
+    :type depth: int
     """
     self._history_heuristic[move] = self._history_heuristic.get(move, 0) + 2 ** depth
 
-  def _gen_children(self, parent: Board) -> list[tuple[Board, str]]:
-    """
-    Generates valid children from the given parent.
-
-    :param parent: Parent node.
-    :type parent: Board
-    :return: List of children.
-    :rtype: list[tuple[Board, str]]
-    """
-    return [(deepcopy(parent).play(move), move) for move in parent.valid_moves.split(";") if not parent.gameover]
-
-  def _evaluate(self, node: Board) -> float:
+  def _evaluate(self, board: Board, move: Optional[Move]) -> float:
     """
     Evaluates the given node.  
     Currently, it's a very naive implementation that weights the winning state (how many pieces surround the enemy queen minus how many pieces surround yours) and the mobility state (amount of your available moves minus the enemy's).
@@ -211,22 +206,29 @@ class AlphaBetaPruner(Brain):
     :return: Node value.
     :rtype: float
     """
-    if (node.state is GameState.DRAW or node.state is GameState.NOT_STARTED):
-      return 0
-    if (node.current_player_has_won):
-      return float('inf')
-    if (node.current_opponent_has_won):
-      return float('-inf')
-
-    node_hash = node.hash()
-    score = self._cached_scores[node_hash]
-    if score is None:
-      current_player = node.current_player_color
-      current_opponent = current_player.opposite
-      valid_moves_maximize = node.calculate_valid_moves_for_player(current_player, True)
-      collision_count_max = node.count_moves_near_queen(current_player)
-      valid_moves_minimize = node.calculate_valid_moves_for_player(current_opponent)
-      collision_count_min = node.count_moves_near_queen(current_opponent)
-      score = (node.count_queen_neighbors(current_opponent) - node.count_queen_neighbors(current_player)) * 20 + (collision_count_max - collision_count_min) * 20 + (len(valid_moves_maximize) - len(valid_moves_minimize)) // 2
-      self._cached_scores[node_hash] = score
+    score = 0
+    if move:
+      board.play_parsed(move)
+    if (board.state is GameState.DRAW or board.state is GameState.NOT_STARTED):
+      score = 0
+    elif (board.current_player_has_won):
+      score = float('inf')
+    elif (board.current_opponent_has_won):
+      score = float('-inf')
+    else:
+      node_hash = board.hash()
+      score = self._cached_scores[node_hash]
+      if score is None:
+        # Move has been played, so color is reversed (es. white played and wants to evaluate the board, but after its move it's not black's turn).
+        score = board.queen_neighbors_by_color(board.current_player_color.opposite) - board.queen_neighbors_by_color(board.current_player_color)
+        # current_player = node.current_player_color
+        # current_opponent = current_player.opposite
+        # valid_moves_maximize = node.calculate_valid_moves(current_player, True)
+        # collision_count_max = node.count_moves_near_queen(current_player)
+        # valid_moves_minimize = node.calculate_valid_moves(current_opponent)
+        # collision_count_min = node.count_moves_near_queen(current_opponent)
+        # score = (node.count_queen_neighbors(current_opponent) - node.count_queen_neighbors(current_player)) * 20 + (collision_count_max - collision_count_min) * 20 + (len(valid_moves_maximize) - len(valid_moves_minimize)) // 2
+        self._cached_scores[node_hash] = score
+    if move:
+      board.undo()
     return score

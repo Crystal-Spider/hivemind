@@ -1,7 +1,7 @@
 import pytest
 from core.board import Board
 
-class TestBoard():
+class TestBoard:
   def test_hash(self):
     board = Board()
     assert board.hash() == 0

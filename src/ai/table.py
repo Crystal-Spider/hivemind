@@ -2,6 +2,7 @@ from collections import OrderedDict
 from typing import Optional, Final, Generic, TypeVar
 from abc import ABC, abstractmethod
 from enum import IntEnum, auto
+from core.game import Move
 
 class AgingTableEntry(ABC):
   """
@@ -154,12 +155,12 @@ class TranspositionTableEntry(AgingTableEntry):
   Transposition table entry.
   """
 
-  def __init__(self, entry_type: TranspositionTableEntryType, value: float, depth: int, move: Optional[str]) -> None:
+  def __init__(self, entry_type: TranspositionTableEntryType, value: float, depth: int, move: Optional[Move]) -> None:
     super().__init__()
     self.type: TranspositionTableEntryType = entry_type
     self.value: float = value
     self.depth: int = depth
-    self.move: Optional[str] = move
+    self.move: Optional[Move] = move
 
 class TranspositionTable(AgingTable[TranspositionTableEntry, TranspositionTableEntry]):
   """
