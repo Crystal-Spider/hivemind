@@ -7,6 +7,7 @@ from core.board import Board
 from core.game import Move
 from ai.brain import Brain, Random, AlphaBetaPruner
 from ai.mcts import MCTS
+from ai.alphamcts import AlphaMCTS
 class Engine:
   """
   Game engine.
@@ -29,7 +30,8 @@ class Engine:
   BRAINS: Final[dict[Strategy, Callable[[], Brain]]] = {
     Strategy.RANDOM: Random,
     Strategy.MINMAX: AlphaBetaPruner,
-    Strategy.MCTS: MCTS
+    Strategy.MCTS: MCTS,
+    Strategy.ALPHAMCTS: AlphaMCTS
   }
   """
   Map for strategies and the respective brain.
@@ -38,7 +40,7 @@ class Engine:
   """
   Default value for option StrategyWhite.
   """
-  DEFAULT_STRATEGY_BLACK: Final[Strategy] = Strategy.MCTS
+  DEFAULT_STRATEGY_BLACK: Final[Strategy] = Strategy.ALPHAMCTS
   """
   Default value for option StrategyBlack.
   """

@@ -113,6 +113,11 @@ class Strategy(StrEnum):
   """
   Monte Carlo Tree Search strategy.
   """
+  ALPHAMCTS="AlphaMCTS"
+  """
+  Monte Carlo Tree Search + ResNet strategy.
+  """
+
 
 class PlayerColor(StrEnum):
   """

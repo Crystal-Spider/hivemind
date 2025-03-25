@@ -73,7 +73,6 @@ class MCTS(Brain):
             result = node.rollout(max_depth=max_depth)
             node.backpropagate(result)
             count+=1
-        print("Simulated games: ",count)
-        
+        print("Simulated nodes: ",count)
         best_move = root.best_child(0).move
         return board.stringify_move(best_move)

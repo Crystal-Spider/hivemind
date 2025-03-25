@@ -3,7 +3,6 @@ from typing import Final, Optional, Set
 from core.enums import GameType, GameState, PlayerColor, BugType, Direction
 from core.game import Position, Bug, Move
 from core.hash import ZobristHash
-
 class Board:
   """
   Game Board.
@@ -713,6 +712,7 @@ class Board:
       raise ValueError("Only one direction at a time can be specified")
     raise ValueError(f"'{move_string}' is not a valid MoveString")
 
+
   def _is_bug_on_top(self, bug: Bug) -> bool:
     """
     Checks if the given bug has been played and is at the top of the stack.
@@ -746,3 +746,97 @@ class Board:
       if (origin := last_move.origin) is not None:
         self._hash.toggle_piece(self._bugs.index(last_move.bug), origin, len(self.bugs_from_pos(origin)))
       self._hash.toggle_piece(self._bugs.index(last_move.bug), last_move.destination, len(self.bugs_from_pos(last_move.destination)) - 1)
+
+  def get_board_matrix(self,mode=0) -> list[list[list[int]]]:
+    """
+    Returns a matrix representing the current state of the game board, including the height of bugs.
+
+    :return: 3D list representing the game board for each BugType and PlayerColor.
+    :rtype: list[list[list[int]]]
+    """
+    if mode==0:
+      size=(7,14,14)
+      layers = [[[0 for _ in range(size[-1])] for _ in range(size[-2])] for _ in range(size[-3])] # 7 possibili direzioni, 14 bugs di partenza, 14 bugs vicini
+
+      bug_to_idx = {}
+      cont = 0
+      for bug_type in BugType:
+        bug_to_idx[bug_type] = cont
+        if bug_type == BugType.SPIDER or bug_type == BugType.BEETLE:
+          cont += 1
+        elif bug_type == BugType.GRASSHOPPER or bug_type == BugType.SOLDIER_ANT:
+          cont += 2
+        cont += 1
+
+      dir_to_idx = [direction for direction in Direction if direction is not Direction.BELOW]
+
+      for pos, bugs in self._pos_to_bug.items():
+        for height, bug in enumerate(bugs):
+          for direction in Direction:
+            if direction is Direction.BELOW:
+              continue
+            neighbor = self._get_neighbor(pos, direction)
+            if neighbor in self._pos_to_bug:
+              for neighbor_bug in self._pos_to_bug[neighbor]:
+                x = bug_to_idx[bug.type]
+                y = bug_to_idx[neighbor_bug.type]
+                z = dir_to_idx.index(direction)
+                layers[z][x][y] = 1
+                
+    else:
+      size = 66
+      offset = size // 2
+      bug_layer_map ={bug_type: 1 for bug_type in BugType}
+      bug_layer_map[BugType.MOSQUITO] = 7
+      bug_layer_map[BugType.BEETLE] = 7
+      total_layers_per_player = sum(bug_layer_map.values())
+
+      layers = [[[0 for _ in range(size)] for _ in range(size)] for _ in range(total_layers_per_player*2)] # 66x66 x (layer totali per giocatore *2) -> 66x66x20
+
+
+      bug_type_map= {}
+      att=0
+      for bug_type in BugType:
+        bug_type_map[bug_type] = att
+        att+=bug_layer_map[bug_type]
+        
+    
+      for pos, bugs in self._pos_to_bug.items():
+        for height, bug in enumerate(bugs):
+          index = bug_type_map[bug.type] + (0 if bug.color == PlayerColor.WHITE else total_layers_per_player)
+          layers[index+height][pos.q + offset][pos.r + offset] = 1
+
+    return layers
+
+  def move_to_index(self, move_string: str) -> Optional[list[int]]:
+
+    if move_string == Move.PASS:
+      return None
+    if (match := re.fullmatch(Move.REGEX, move_string)):
+      pos=[]
+      bug_string_1, _, _, _, _, left_dir, bug_string_2, _, _, _, right_dir = match.groups()
+      moved = Bug.parse(bug_string_1)
+      around=Bug.parse(bug_string_2)
+
+      bug_to_idx={}
+      cont=0
+      for bug_type in BugType:
+        bug_to_idx[bug_type]=cont
+        if bug_type==BugType.SPIDER or bug_type==BugType.BEETLE:
+          cont+=1
+        elif bug_type==BugType.GRASSHOPPER or bug_type==BugType.SOLDIER_ANT:
+          cont+=2
+        cont+=1
+
+      dir_to_idx = [direction for direction in Direction if direction is not Direction.BELOW]
+      if left_dir or right_dir:
+        pos.append(dir_to_idx.index('|'+left_dir if left_dir else right_dir+'|'))
+      else:
+        pos.append(0)
+      
+      pos.append(bug_to_idx[moved.type])
+      pos.append(bug_to_idx[around.type])
+      
+      return pos
+      
+        
