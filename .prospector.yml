@@ -32,6 +32,7 @@ pycodestyle:
     - E501 # Line length is already checked by Pylint.
     - E701 # Sometimes rasing an exception in the same line is more readable.
     - W291 # Disable trailing whitespaces for comments, since they use Markdown.
+    - E306 # Don't like it.
 
 mccabe:
   options:

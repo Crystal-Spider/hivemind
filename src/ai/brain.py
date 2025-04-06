@@ -207,9 +207,9 @@ class AlphaBetaPruner(Brain):
       board.play_parsed(move)
     if (board.state is GameState.DRAW or board.state is GameState.NOT_STARTED):
       score = 0
-    elif (board.current_player_has_won):
+    elif board.current_player_has_won:
       score = float('inf')
-    elif (board.current_opponent_has_won):
+    elif board.current_opponent_has_won:
       score = float('-inf')
     else:
       node_hash = board.hash()

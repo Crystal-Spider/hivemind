@@ -229,48 +229,55 @@ class Board:
         # Move string will be missing only when this method gets called from a "simulation" of an agent, so we don't really care about updating some stuff, like the history of moves.
         self.move_strings.append(move_string)
       self.moves.append(move)
-      if move:
-        self._bug_to_pos[move.bug] = move.destination
-        if move.origin:
-          self._pos_to_bug[move.origin].pop()
-        if move.destination in self._pos_to_bug:
-          self._pos_to_bug[move.destination].append(move.bug)
-        else:
-          self._pos_to_bug[move.destination] = [move.bug]
-
-        if move.bug.type is BugType.QUEEN_BEE:
-          self._queen_neighbors_by_color[move.bug.color].neighbors = set()
-          self._queen_neighbors_by_color[move.bug.color].count = 0
-          for direction in Direction:
-            neighbor = self._get_neighbor(move.destination, direction)
-            self._queen_neighbors_by_color[move.bug.color].neighbors.add(neighbor)
-            self._queen_neighbors_by_color[move.bug.color].count += bool(self.bugs_from_pos(neighbor))
-        else:
-          if len(self.bugs_from_pos(move.destination)) == 1:
-            if move.destination in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
-              self._queen_neighbors_by_color[PlayerColor.WHITE].count += 1
-            elif move.destination in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
-              self._queen_neighbors_by_color[PlayerColor.BLACK].count += 1
-          if move.origin and not self.bugs_from_pos(move.origin):
-            if move.origin in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
-              self._queen_neighbors_by_color[PlayerColor.WHITE].count -= 1
-            elif move.origin in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
-              self._queen_neighbors_by_color[PlayerColor.BLACK].count -= 1
-
-        white_queen_surrounded = self._queen_neighbors_by_color[PlayerColor.WHITE].count == 6
-        black_queen_surrounded = self._queen_neighbors_by_color[PlayerColor.BLACK].count == 6
-        if black_queen_surrounded and white_queen_surrounded:
-          self.state = GameState.DRAW
-          self.gameover = True
-        elif black_queen_surrounded:
-          self.state = GameState.WHITE_WINS
-          self.gameover = True
-        elif white_queen_surrounded:
-          self.state = GameState.BLACK_WINS
-          self.gameover = True
+      self._play(move)
       self._update_hash()
       return self
     raise ValueError(f"You can't {"play" if move else Move.PASS} when the game is over")
+
+  def _play(self, move: Optional[Move]) -> None:
+    """
+    Updates the board with the effects of the given move, if any.
+
+    :param move: Move to play.
+    :type move: Optional[Move]
+    """
+    if move:
+      self._bug_to_pos[move.bug] = move.destination
+      if move.origin:
+        self._pos_to_bug[move.origin].pop()
+      if move.destination in self._pos_to_bug:
+        self._pos_to_bug[move.destination].append(move.bug)
+      else:
+        self._pos_to_bug[move.destination] = [move.bug]
+      if move.bug.type is BugType.QUEEN_BEE:
+        self._queen_neighbors_by_color[move.bug.color].neighbors = set()
+        self._queen_neighbors_by_color[move.bug.color].count = 0
+        for direction in Direction:
+          neighbor = self._get_neighbor(move.destination, direction)
+          self._queen_neighbors_by_color[move.bug.color].neighbors.add(neighbor)
+          self._queen_neighbors_by_color[move.bug.color].count += bool(self.bugs_from_pos(neighbor))
+      else:
+        if len(self.bugs_from_pos(move.destination)) == 1:
+          if move.destination in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
+            self._queen_neighbors_by_color[PlayerColor.WHITE].count += 1
+          elif move.destination in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
+            self._queen_neighbors_by_color[PlayerColor.BLACK].count += 1
+        if move.origin and not self.bugs_from_pos(move.origin):
+          if move.origin in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
+            self._queen_neighbors_by_color[PlayerColor.WHITE].count -= 1
+          elif move.origin in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
+            self._queen_neighbors_by_color[PlayerColor.BLACK].count -= 1
+      white_queen_surrounded = self._queen_neighbors_by_color[PlayerColor.WHITE].count == 6
+      black_queen_surrounded = self._queen_neighbors_by_color[PlayerColor.BLACK].count == 6
+      if black_queen_surrounded and white_queen_surrounded:
+        self.state = GameState.DRAW
+        self.gameover = True
+      elif black_queen_surrounded:
+        self.state = GameState.WHITE_WINS
+        self.gameover = True
+      elif white_queen_surrounded:
+        self.state = GameState.BLACK_WINS
+        self.gameover = True
 
   def undo(self, amount: int = 1) -> None:
     """
@@ -293,36 +300,44 @@ class Board:
           if self.move_strings:
             # Move string history might not be available when this method gets called from a "simulation" of an agent.
             self.move_strings.pop()
-          move = self.moves.pop()
-          if move:
-            self._pos_to_bug[move.destination].pop()
-            self._bug_to_pos[move.bug] = move.origin
-            if move.origin:
-              self._pos_to_bug[move.origin].append(move.bug)
-            if move.bug.type is BugType.QUEEN_BEE:
-              self._queen_neighbors_by_color[move.bug.color].neighbors = set()
-              self._queen_neighbors_by_color[move.bug.color].count = 0
-              for direction in Direction:
-                neighbor = self._get_neighbor(move.destination, direction)
-                self._queen_neighbors_by_color[move.bug.color].neighbors.add(neighbor)
-                self._queen_neighbors_by_color[move.bug.color].count += bool(self.bugs_from_pos(neighbor))
-            else:
-              if not self.bugs_from_pos(move.destination):
-                if move.destination in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
-                  self._queen_neighbors_by_color[PlayerColor.WHITE].count -= 1
-                elif move.destination in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
-                  self._queen_neighbors_by_color[PlayerColor.BLACK].count -= 1
-              if move.origin and len(self.bugs_from_pos(move.origin)) == 1:
-                if move.origin in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
-                  self._queen_neighbors_by_color[PlayerColor.WHITE].count += 1
-                elif move.origin in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
-                  self._queen_neighbors_by_color[PlayerColor.BLACK].count += 1
+          self._undo(self.moves.pop())
         if self.turn == 0:
           self.state = GameState.NOT_STARTED
       else:
         raise ValueError(f"Not enough moves to undo: asked for {amount} but only {len(self.moves)} were made")
     else:
       raise ValueError("The game has yet to begin")
+  
+  def _undo(self, move: Optional[Move]) -> None:
+    """
+    Undoes the effects of the given move, if any.
+
+    :param move: Move to undo.
+    :type move: Optional[Move]
+    """
+    if move:
+      self._pos_to_bug[move.destination].pop()
+      self._bug_to_pos[move.bug] = move.origin
+      if move.origin:
+        self._pos_to_bug[move.origin].append(move.bug)
+      if move.bug.type is BugType.QUEEN_BEE:
+        self._queen_neighbors_by_color[move.bug.color].neighbors = set()
+        self._queen_neighbors_by_color[move.bug.color].count = 0
+        for direction in Direction:
+          neighbor = self._get_neighbor(move.destination, direction)
+          self._queen_neighbors_by_color[move.bug.color].neighbors.add(neighbor)
+          self._queen_neighbors_by_color[move.bug.color].count += bool(self.bugs_from_pos(neighbor))
+      else:
+        if not self.bugs_from_pos(move.destination):
+          if move.destination in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
+            self._queen_neighbors_by_color[PlayerColor.WHITE].count -= 1
+          elif move.destination in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
+            self._queen_neighbors_by_color[PlayerColor.BLACK].count -= 1
+        if move.origin and len(self.bugs_from_pos(move.origin)) == 1:
+          if move.origin in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
+            self._queen_neighbors_by_color[PlayerColor.WHITE].count += 1
+          elif move.origin in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
+            self._queen_neighbors_by_color[PlayerColor.BLACK].count += 1
 
   def stringify_move(self, move: Optional[Move]) -> str:
     """
