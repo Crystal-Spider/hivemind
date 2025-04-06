@@ -81,7 +81,7 @@ class Engine:
     self.board: Optional[Board] = None
 
   def __getitem__(self, attr: str):
-    return self.__dict__.get(attr, type(self).__dict__[attr])
+    return self.__dict__[attr] if attr in self.__dict__ else type(self).__dict__[attr]
 
   def __setitem__(self, attr: str, value: Any):
     self.__dict__[attr] = value

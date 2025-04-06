@@ -658,7 +658,7 @@ class Board:
         position = self._get_neighbor(origin, direction)
         # A Pillbug can move another bug piece only if it's not stacked, it's not the last moved piece, it can be moved without breaking the hive, and it's not obstructed in moving above the Pillbug itself
         if len(bugs := self.bugs_from_pos(position)) == 1 and self._was_not_last_moved(neighbor := bugs[-1]) and self._can_move_without_breaking_hive(position) and Move(neighbor, position, origin) in self._get_beetle_moves(neighbor, position):
-          moves.update(Move(neighbor, position, move.destination) for move in self._get_beetle_moves(neighbor, position, True) if move.destination in empty_positions)
+          moves.update(Move(neighbor, position, move.destination) for move in self._get_beetle_moves(neighbor, origin, True) if move.destination in empty_positions)
     return moves
 
   def _can_move_without_breaking_hive(self, position: Position) -> bool:

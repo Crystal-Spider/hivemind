@@ -9,13 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Nothing new.
 
-## [v1.5.0] - 2025/02/17
+## [v1.5.0] - 2025/04/06
 
 - Renamed minmax agents to negamax.
 - Made checking whether a piece can move without breaking the hive faster by using Tarjan's algorithm for articulation points.
 - Fixed time limit parameter in negamax agents.
 - Optimized negamax agents.
-- Changed board evaluation function for negamax agents.
+- Changed board evaluation function for negamax agents (draft).
+- Fixed some minor issues.
+- Fixed Pillbug special moves.
 
 ## [v1.4.0] - 2025/02/14
 
@@ -64,9 +66,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 [Unreleased]: https://github.com/crystal-spider/hivemind
 [README]: https://github.com/crystal-spider/hivemind#readme
 
-[v1.5.0]: https://github.com/crystal-spider/hivemind/releases?q=1.5.0
-[v1.4.0]: https://github.com/crystal-spider/hivemind/releases?q=1.4.0
-[v1.3.0]: https://github.com/crystal-spider/hivemind/releases?q=1.3.0
-[v1.2.0]: https://github.com/crystal-spider/hivemind/releases?q=1.2.0
-[v1.1.0]: https://github.com/crystal-spider/hivemind/releases?q=1.1.0
-[v1.0.0]: https://github.com/crystal-spider/hivemind/releases?q=1.0.0
+[v1.5.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.5.0
+[v1.4.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.4.0
+[v1.3.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.3.0
+[v1.2.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.2.0
+[v1.1.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.1.0
+[v1.0.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.0.0

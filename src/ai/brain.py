@@ -7,10 +7,6 @@ from core.game import Move
 from core.enums import GameState
 from ai.table import TranspositionTable, TranspositionTableEntry, TranspositionTableEntryType, ScoreTable
 
-class AlphaBetaFrame:
-  def __init__(self) -> None:
-    pass
-
 class Brain(ABC):
   """
   Base abstract class for AI agents.
@@ -219,10 +215,10 @@ class AlphaBetaPruner(Brain):
       node_hash = board.hash()
       score = self._cached_scores[node_hash]
       if score is None:
-        # Move has been played, so color is reversed (es. white played and wants to evaluate the board, but after its move it's not black's turn).
-        score = board.queen_neighbors_by_color(board.current_player_color.opposite) - board.queen_neighbors_by_color(board.current_player_color)
-        # current_player = node.current_player_color
-        # current_opponent = current_player.opposite
+        player = board.current_player_color
+        opponent = player.opposite
+        # Maximize the neighbors of the opponent's queen and minimize our own queen neighbors.
+        score = board.queen_neighbors_by_color(opponent) - board.queen_neighbors_by_color(player)
         # valid_moves_maximize = node.calculate_valid_moves(current_player, True)
         # collision_count_max = node.count_moves_near_queen(current_player)
         # valid_moves_minimize = node.calculate_valid_moves(current_opponent)
