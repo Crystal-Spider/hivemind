@@ -13,7 +13,7 @@ class Engine:
   Game engine.
   """
 
-  VERSION: Final[str] = "1.4.0"
+  VERSION: Final[str] = "1.5.0"
   """
   Engine version.
   """
