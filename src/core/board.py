@@ -307,7 +307,7 @@ class Board:
         raise ValueError(f"Not enough moves to undo: asked for {amount} but only {len(self.moves)} were made")
     else:
       raise ValueError("The game has yet to begin")
-  
+
   def _undo(self, move: Optional[Move]) -> None:
     """
     Undoes the effects of the given move, if any.

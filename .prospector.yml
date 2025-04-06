@@ -11,13 +11,13 @@ pylint:
     max-nested-blocks: 6
     max-bool-expr: 8
     max-locals: 20
-    max-attributes: 10
-    max-complexity: 15
-    max-branches: 15
+    max-complexity: 16
+    max-branches: 16
     max-args: 10
   disable:
     - C0330 # Avoid "bad-continuation" warnings that might be affected by 2-spaces indentation.
     - C0321 # Sometimes rasing an exception in the same line is more readable.
+    - R0902 # Classes are allowed to have as many instance attributes as needed.
     - R0903 # Classes are allowed to have less than 2 public methods.
     - R0917 # Don't really care about distinction from arguments and named arguments in the count of total arguments.
 
