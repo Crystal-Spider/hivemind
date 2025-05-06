@@ -366,4 +366,4 @@ if __name__ == "__main__":
   Engine().start()
   # e = Engine()
   # e.newgame(["Base+MLP"])
-  # cProfile.run("e.bestmove('depth', '7')")
+  # cProfile.run("e.bestmove('depth', '2')")

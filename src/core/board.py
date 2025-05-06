@@ -1,5 +1,6 @@
 import re
 from typing import Final, Optional
+from collections import defaultdict
 from dataclasses import dataclass
 from core.enums import GameType, GameState, PlayerColor, BugType, Direction
 from core.game import Position, Bug, Move
@@ -74,6 +75,7 @@ class Board:
     self._art_pos: set[Position] = set()
     self._hash: ZobristHash = ZobristHash(self.type)
     self._snapshots: dict[int, set[Move]] = {}
+    self._draw_counter: dict[int, int] = defaultdict(lambda: 0)
     self._queen_neighbors_by_color: dict[PlayerColor, QueenNeighbors] = {
       PlayerColor.WHITE: QueenNeighbors(set()),
       PlayerColor.BLACK: QueenNeighbors(set())
@@ -231,6 +233,9 @@ class Board:
       self.moves.append(move)
       self._play(move)
       self._update_hash()
+      self._draw_counter[self.hash()] += 1
+      if self._draw_counter[self.hash()] > 2:
+        self.state = GameState.DRAW
       return self
     raise ValueError(f"You can't {"play" if move else Move.PASS} when the game is over")
 
@@ -296,6 +301,7 @@ class Board:
         for _ in range(amount):
           self.turn -= 1
           self.current_player_color = self.current_player_color.opposite
+          self._draw_counter[self.hash()] -= 1
           self._update_hash()
           if self.move_strings:
             # Move string history might not be available when this method gets called from a "simulation" of an agent.
