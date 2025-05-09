@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Nothing new.
 
+## [v1.6.0] - 2025/05/09
+
+- Fixed internal caching of queen neighbors when undoing moves.
+- Slightly improved board evaluation function.
+- Fixed some documentation formatting.
+- Fixed an error in the evaluation function that made minmax agent think a losing move was a winning one.
+- Fixed an error when trying to change the `MaxBranchingFactor` engine option.
+
 ## [v1.5.0] - 2025/04/06
 
 - Renamed minmax agents to negamax.
@@ -66,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 [Unreleased]: https://github.com/crystal-spider/hivemind
 [README]: https://github.com/crystal-spider/hivemind#readme
 
+[v1.6.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.6.0
 [v1.5.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.5.0
 [v1.4.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.4.0
 [v1.3.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.3.0

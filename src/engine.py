@@ -255,7 +255,7 @@ class Engine:
         self[option.lower()] = Strategy(value)
         self.brains[PlayerColor[option.name.split("_")[1]]] = Engine.BRAINS[Strategy(value)]()
       # Handle options with type Int
-      case Option.NUM_THREADS if value.isdigit() and self[f"MIN_{option.name}"] <= int(value) <= self[f"MAX_{option.name}"]:
+      case Option.NUM_THREADS | Option.MAX_BRANCHING_FACTOR if value.isdigit() and self[f"MIN_{option.name}"] <= int(value) <= self[f"MAX_{option.name}"]:
         self[option.lower()] = int(value)
       # Handle erroneous use of command
       case _:
@@ -266,8 +266,8 @@ class Engine:
 
   def newgame(self, arguments: list[str]) -> None:
     """
-    Handles 'newgame' command with arguments.  
-    Tries to create a new game by instantiating the Board.
+    | Handles 'newgame' command with arguments.
+    | Tries to create a new game by instantiating the Board.
 
     :param arguments: Command arguments.
     :type arguments: list[str]
@@ -298,7 +298,10 @@ class Engine:
       if restriction == "time" and re.fullmatch(r"[0-9]{2}:[0-5][0-9]:[0-5][0-9]", value):
         print(self.brains[self.board.current_player_color].find_best_move(deepcopy(self.board), self.maxbranchingfactor, time_limit=sum(factor * int(time) for factor, time in zip([3600, 60, 1], value.split(':')))))
       elif restriction == "depth" and value.isdigit() and (max_depth := int(value)) > 0:
-        print(self.brains[self.board.current_player_color].find_best_move(deepcopy(self.board), self.maxbranchingfactor, max_depth=max_depth))
+        try:
+          print(self.brains[self.board.current_player_color].find_best_move(deepcopy(self.board), self.maxbranchingfactor, max_depth=max_depth))
+        except ValueError as e:
+          self.error(e)
       else:
         self.error(f"Invalid arguments for command '{Command.BESTMOVE}'")
 

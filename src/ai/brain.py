@@ -60,8 +60,8 @@ class Brain(ABC):
 
   def _empty_cache(self) -> None:
     """
-    Empties the current cache for the best move.  
-    Might empty more data depending on the agent.
+    | Empties the current cache for the best move.
+    | Might empty more data depending on the agent.
     """
     self._best_move_cache = None
 
@@ -161,8 +161,8 @@ class AlphaBetaPruner(Brain):
 
   def _move_order_heuristic(self, board: Board, move: Move, best_move: Optional[Move], depth: int) -> tuple[float, int]:
     """
-    Assigns a heuristic value to moves for ordering.  
-    Higher values indicate better moves.
+    | Assigns a heuristic value to moves for ordering.
+    | Higher values indicate better moves.
     """
     if move == best_move:
       return (float('inf'), 1) # Prioritize PV move.
@@ -194,8 +194,7 @@ class AlphaBetaPruner(Brain):
 
   def _evaluate(self, board: Board, move: Optional[Move]) -> float:
     """
-    Evaluates the given node.  
-    Currently, it's a very naive implementation that weights the winning state (how many pieces surround the enemy queen minus how many pieces surround yours) and the mobility state (amount of your available moves minus the enemy's).
+    Evaluates the given node.
 
     :param node: Playing board.
     :type node: Board
@@ -218,7 +217,9 @@ class AlphaBetaPruner(Brain):
         player = board.current_player_color
         opponent = player.opposite
         # Maximize the neighbors of the opponent's queen and minimize our own queen neighbors.
-        score = board.queen_neighbors_by_color(opponent) - board.queen_neighbors_by_color(player)
+        score = 10 * (board.queen_neighbors_by_color(opponent) - board.queen_neighbors_by_color(player))
+        # Maximize our own pieces in play and minimize the opponent's.
+        score += 2 * (board.pieces_in_play(player) - board.pieces_in_play(opponent))
         # valid_moves_maximize = node.calculate_valid_moves(current_player, True)
         # collision_count_max = node.count_moves_near_queen(current_player)
         # valid_moves_minimize = node.calculate_valid_moves(current_opponent)

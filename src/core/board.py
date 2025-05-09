@@ -53,9 +53,9 @@ class Board:
     """
     self._bug_to_pos: dict[Bug, Optional[Position]] = {}
     """
-    Map for bug pieces and their current position.  
-    Position is None if the piece has not been played yet.  
-    Also serves as a check for valid pieces for the game.
+    | Map for bug pieces and their current position.
+    | Position is None if the piece has not been played yet.
+    | Also serves as a check for valid pieces for the game.
     """
     for color in PlayerColor:
       for expansion in self.type:
@@ -116,7 +116,7 @@ class Board:
     :return: Whether the current player has won.
     :rtype: bool
     """
-    return (self.state is GameState.WHITE_WINS and self.current_player_color is PlayerColor.BLACK) or (self.state is GameState.BLACK_WINS and self.current_player_color is PlayerColor.WHITE)
+    return (self.state is GameState.WHITE_WINS and self.current_player_color is PlayerColor.WHITE) or (self.state is GameState.BLACK_WINS and self.current_player_color is PlayerColor.BLACK)
 
   @property
   def current_opponent_has_won(self) -> bool:
@@ -128,7 +128,7 @@ class Board:
     :return: Whether the current player's opponent has won.
     :rtype: bool
     """
-    return (self.state is GameState.WHITE_WINS and self.current_player_color is PlayerColor.WHITE) or (self.state is GameState.BLACK_WINS and self.current_player_color is PlayerColor.BLACK)
+    return (self.state is GameState.WHITE_WINS and self.current_player_color is PlayerColor.BLACK) or (self.state is GameState.BLACK_WINS and self.current_player_color is PlayerColor.WHITE)
 
   @property
   def valid_moves(self) -> str:
@@ -329,21 +329,22 @@ class Board:
       if move.bug.type is BugType.QUEEN_BEE:
         self._queen_neighbors_by_color[move.bug.color].neighbors = set()
         self._queen_neighbors_by_color[move.bug.color].count = 0
-        for direction in Direction:
-          neighbor = self._get_neighbor(move.destination, direction)
-          self._queen_neighbors_by_color[move.bug.color].neighbors.add(neighbor)
-          self._queen_neighbors_by_color[move.bug.color].count += bool(self.bugs_from_pos(neighbor))
+        if move.origin:
+          for direction in Direction:
+            neighbor = self._get_neighbor(move.origin, direction)
+            self._queen_neighbors_by_color[move.bug.color].neighbors.add(neighbor)
+            self._queen_neighbors_by_color[move.bug.color].count += bool(self.bugs_from_pos(neighbor))
       else:
-        if not self.bugs_from_pos(move.destination):
-          if move.destination in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
-            self._queen_neighbors_by_color[PlayerColor.WHITE].count -= 1
-          elif move.destination in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
-            self._queen_neighbors_by_color[PlayerColor.BLACK].count -= 1
         if move.origin and len(self.bugs_from_pos(move.origin)) == 1:
           if move.origin in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
             self._queen_neighbors_by_color[PlayerColor.WHITE].count += 1
           elif move.origin in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
             self._queen_neighbors_by_color[PlayerColor.BLACK].count += 1
+        if not self.bugs_from_pos(move.destination):
+          if move.destination in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
+            self._queen_neighbors_by_color[PlayerColor.WHITE].count -= 1
+          elif move.destination in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
+            self._queen_neighbors_by_color[PlayerColor.BLACK].count -= 1
 
   def stringify_move(self, move: Optional[Move]) -> str:
     """
@@ -370,6 +371,14 @@ class Board:
     return Move.PASS
 
   def queen_neighbors_by_color(self, color: PlayerColor) -> int:
+    """
+    Returns how many neighbors does the queen of the specified player have.
+
+    :param color: Player color.
+    :type color: PlayerColor
+    :return: Amount of queen neighbors.
+    :rtype: int
+    """
     return self._queen_neighbors_by_color[color].count
 
   def bugs_from_pos(self, position: Position) -> list[Bug]:
@@ -393,6 +402,17 @@ class Board:
     :rtype: Optional[Position]
     """
     return self._bug_to_pos.get(bug, None) if bug else None
+
+  def pieces_in_play(self, color: PlayerColor) -> int:
+    """
+    Returns how many pieces are in play for the specified player.
+
+    :param color: Player color.
+    :type color: PlayerColor
+    :return: Amount of pieces in play.
+    :rtype: int
+    """
+    return sum(1 for bug, pos in self._bug_to_pos.items() if bug.color == color and pos)
 
   def hash(self) -> int:
     """

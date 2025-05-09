@@ -8,48 +8,48 @@ class Command(StrEnum):
   """
   INFO = "info"
   """
-  Displays the identifier string of the engine and list of its capabilities.  
-  See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#info.
+  | Displays the identifier string of the engine and list of its capabilities.
+  | See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#info.
   """
   HELP = "help"
   """
-  Displays the list of available commands.  
-  If a command is specified, displays the help for that command.
+  | Displays the list of available commands.
+  | If a command is specified, displays the help for that command.
   """
   OPTIONS = "options"
   """
-  Displays the available options for the engine.  
-  See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#options.
+  | Displays the available options for the engine.
+  | See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#options.
   """
   NEWGAME = "newgame"
   """
-  Starts a game. The game type and state depend on the command arguments.  
-  See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#newgame.
+  | Starts a game. The game type and state depend on the command arguments.
+  | See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#newgame.
   """
   VALIDMOVES = "validmoves"
   """
-  Displays a list of every valid move in the current game.  
-  See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#validmoves.
+  | Displays a list of every valid move in the current game.
+  | See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#validmoves.
   """
   BESTMOVE = "bestmove"
   """
-  Search for the best move for the current game.  
-  See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#bestmove.
+  | Search for the best move for the current game.
+  | See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#bestmove.
   """
   PLAY = "play"
   """
-  Plays the specified MoveString in the current game.  
-  See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#play.
+  | Plays the specified MoveString in the current game.
+  | See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#play.
   """
   PASS = "pass"
   """
-  Plays a passing move in the current game.  
-  See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#pass.
+  | Plays a passing move in the current game.
+  | See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#pass.
   """
   UNDO = "undo"
   """
-  Undoes the specified amount of moves in the current game.  
-  See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#undo.
+  | Undoes the specified amount of moves in the current game.
+  | See https://github.com/jonthysell/Mzinga/wiki/UniversalHiveProtocol#undo.
   """
   EXIT = "exit"
   """
@@ -181,8 +181,8 @@ class GameState(StrEnum):
 
 class GameType(Flag):
   """
-  Game type.  
-  Determines the available pieces.
+  | Game type.
+  | Determines the available pieces.
   """
   BASE = auto()
   """
@@ -204,8 +204,8 @@ class GameType(Flag):
   @classmethod
   def parse(cls, game_type: str):
     """
-    Parses a GameTypeString.  
-    The GameTypeString always needs to include the Base GameType.
+    | Parses a GameTypeString.
+    | The GameTypeString always needs to include the Base GameType.
 
     :param type: GameTypeString.
     :type type: str
@@ -244,59 +244,59 @@ class BugType(StrEnum):
   """
   QUEEN_BEE = "Q"
   """
-  Queen Bee.  
-  Moves by 1 cell.  
-  Must be placed after the first turn and by the fourth.  
-  Surrounding this piece with other pieces is the win condition.
+  | Queen Bee.
+  | Moves by 1 cell.
+  | Must be placed after the first turn and by the fourth.
+  | Surrounding this piece with other pieces is the win condition.
   """
   SPIDER = "S"
   """
-  Spider.  
-  Moves by exactly 3 cells around the hive.
+  | Spider.
+  | Moves by exactly 3 cells around the hive.
   """
   BEETLE = "B"
   """
-  Beetle.  
-  Moves by 1 cell, but can also go above the hive.  
-  Pieces below the Beetle cannot move and the cell is now considered of the Beetle's color.  
-  Can go above other pieces already above the hive, piling up.
+  | Beetle.
+  | Moves by 1 cell, but can also go above the hive.
+  | Pieces below the Beetle cannot move and the cell is now considered of the Beetle's color.
+  | Can go above other pieces already above the hive, piling up.
   """
   GRASSHOPPER = "G"
   """
-  Grasshopper.  
-  Moves in a straight by jumping over other pieces.
+  | Grasshopper.
+  | Moves in a straight by jumping over other pieces.
   """
   SOLDIER_ANT = "A"
   """
-  Soldier Ant.  
-  Moves by any amount of cells around the hive.
+  | Soldier Ant.
+  | Moves by any amount of cells around the hive.
   """
   MOSQUITO = "M"
   """
-  Mosquito.  
-  Available with GameType expansion M.  
-  Moves by coping adiacent pieces' moveset.  
-  If it goes above the hive by coping a Beetle, it can keep moving like a Beetle until it goes back down.  
-  If it's only neighboring piece is another Mosquito, it cannot move.
+  | Mosquito.
+  | Available with GameType expansion M.
+  | Moves by coping adiacent pieces' moveset.
+  | If it goes above the hive by coping a Beetle, it can keep moving like a Beetle until it goes back down.
+  | If it's only neighboring piece is another Mosquito, it cannot move.
   """
   LADYBUG = "L"
   """
-  Ladybug.  
-  Available with GameType expansion L.  
-  Moves by exactly 3 cells, like a Spider, but the first 2 steps must be above the hive.
+  | Ladybug.
+  | Available with GameType expansion L.
+  | Moves by exactly 3 cells, like a Spider, but the first 2 steps must be above the hive.
   """
   PILLBUG = "P"
   """
-  Pillbug.  
-  Available with GameType expansion P.  
-  Moves by 1 cell.  
-  Instead of moving itself, it can move a neighboring piece above itself, and then back down on a neighboring empty cell.
+  | Pillbug.
+  | Available with GameType expansion P.
+  | Moves by 1 cell.
+  | Instead of moving itself, it can move a neighboring piece above itself, and then back down on a neighboring empty cell.
   """
 
 class Direction(StrEnum):
   """
-  Hexagonal multi-layered grid direction.  
-  The grid is assumed to be oriented with cells point-up.
+  | Hexagonal multi-layered grid direction.
+  | The grid is assumed to be oriented with cells point-up.
   """
   RIGHT = "|-"
   """

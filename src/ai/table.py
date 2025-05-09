@@ -23,8 +23,8 @@ Value type generic for `AgingTable`.
 
 class AgingTable(ABC, Generic[_Entry, _Value]):
   """
-  Aging table, storing `_Entry` type entries into a hash table that supports deleting them after their are not accessed for a long time (they aged).  
-  The table might optionally wrap the inner entries and expose a value-based interface instead, depending on whether the `_Value` type is equal to the `_Entry` type.
+  | Aging table, storing `_Entry` type entries into a hash table that supports deleting them after their are not accessed for a long time (they aged).
+  | The table might optionally wrap the inner entries and expose a value-based interface instead, depending on whether the `_Value` type is equal to the `_Entry` type.
   """
 
   def __init__(self, max_age: int, max_size: int) -> None:

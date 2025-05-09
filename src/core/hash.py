@@ -7,14 +7,14 @@ _MAX_PIECES: Final[int] = 28
 _BOARD_PAD_SIZE: Final[int] = 2
 _MAX_BOARD_SIZE: Final[int] = (_MAX_PIECES + (_BOARD_PAD_SIZE * 2)) * 2 + 1
 """
-Board size is at most as long as all pieces side by side.  
-However, the hive is not necessarily centered with respect to the board origin (`Position(0, 0)`).  
-To account for possible shifts, the board size is padded, with 1 extra cell to define a proper center.  
-However, pieces might be placed all on one side, so we double the size (along with the padding).  
-The pad size is small because, especially since the board size is doubled, it's very unlikely that a piece will actually get further than 32 tiles from the origin.
+| Board size is at most as long as all pieces side by side.
+| However, the hive is not necessarily centered with respect to the board origin (`Position(0, 0)`).
+| To account for possible shifts, the board size is padded, with 1 extra cell to define a proper center.
+| However, pieces might be placed all on one side, so we double the size (along with the padding).
+| The pad size is small because, especially since the board size is doubled, it's very unlikely that a piece will actually get further than 32 tiles from the origin.
 
-Another possible solution, safer but less efficient, would be to use a dynamic hash map for the board hashes rather than a fixed-size matrix.  
-A smaller (e.g., 16x16) map could be initialized in the same way, and then progressively generate new hashes for new positions beyond the initial generation.
+| Another possible solution, safer but less efficient, would be to use a dynamic hash map for the board hashes rather than a fixed-size matrix.
+| A smaller (e.g., 16x16) map could be initialized in the same way, and then progressively generate new hashes for new positions beyond the initial generation.
 
 Lastly, the best solution would be to have a fixed-size matrix, but an efficient way to compute an hash invariant to offsets.
 """
