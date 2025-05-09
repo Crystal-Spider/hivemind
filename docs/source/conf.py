@@ -19,7 +19,7 @@ sys.path.insert(0, pathlib.Path(__file__).parents[2].joinpath('src').resolve().a
 project = 'Hivemind'
 copyright = '2024, Riccardo Chimisso & Alberto Vendramini'
 author = 'Riccardo Chimisso & Alberto Vendramini'
-release = '1.5.0'
+release = '1.6.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
