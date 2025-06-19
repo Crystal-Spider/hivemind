@@ -7,6 +7,4 @@ dist
 build
 docs/build/**/*
 *.spec
-Dockerfile
-Dockerfile_gpu
 docker-compose.yml

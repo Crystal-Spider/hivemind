@@ -1,0 +1,51 @@
+FROM nvidia/cuda:12.8.0-cudnn-devel-ubuntu22.04
+
+# Imposta la modalità non interattiva per apt e installa le dipendenze di sistema essenziali. [1, 2]
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common build-essential wget curl git ca-certificates && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Aggiungi il PPA deadsnakes per Python 3.12 e installa Python 3.12.2.
+# python3.12-dev fornisce gli header necessari per la compilazione di pacchetti Python.
+# Il pacchetto 'python3.12-distutils' è stato rimosso in Python 3.12 e non è più necessario. [3, 4]
+RUN add-apt-repository ppa:deadsnakes/ppa && apt-get update && \
+    apt-get install -y --no-install-recommends python3.12 python3.12-dev && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Installa pip per Python 3.12. [2]
+RUN wget https://bootstrap.pypa.io/get-pip.py && python3.12 get-pip.py && rm get-pip.py
+
+# (Opzionale) Imposta python3.12 come eseguibile python3 predefinito. [2]
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
+
+# Definisci le versioni di PyTorch e CUDA come variabili d'ambiente per chiarezza.
+# Nota: PyTorch 2.6.0a0 è una build alpha/nightly. Per le versioni stabili, consulta il sito ufficiale di PyTorch. [2]
+ENV TORCH_VERSION=2.3.1
+# Questa dovrebbe corrispondere alla versione CUDA dell'immagine base. [2]
+ENV CUDA_VERSION=12.1
+
+# Installa PyTorch, Torchvision e Torchaudio con supporto CUDA specifico.
+# Il suffisso +cu128 è fondamentale per garantire il supporto a CUDA 12.8. [2]
+RUN python3.12 -m pip install torch==${TORCH_VERSION}+cu121 torchvision==0.18.1+cu121 torchaudio==${TORCH_VERSION}+cu121 \
+    -f https://download.pytorch.org/whl/torch_stable.html && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copia requirements e installa le dipendenze
+COPY requirements.txt .
+
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copia tutto il codice del progetto
+COPY . .
+
+# Comando di avvio: lancia il tuo server UHP
+CMD ["python3", "src/engine.py"]
+
+
+#BUILD: docker build -t hivemind_gpu  . -f Dockerfile_gpu
+#RUN: docker run --gpus all  -t hivemind_gpu
+#RUN INTERATTIVA: docker run --gpus all  -it hivemind_gpu
