@@ -102,7 +102,8 @@ class AlphaBetaPruner(Brain):
         if time_limit and time() - start_time > time_limit:
           break
     except TimeoutError:
-      pass
+      for _ in range(depth):
+        board.undo()
     self._transpos_table.flush()
     print(f"Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}; Time: {time() - start_time}")
     self._visited_nodes = 0

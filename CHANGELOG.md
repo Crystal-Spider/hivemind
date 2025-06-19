@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Nothing new.
 
+## [v1.6.1] - 2025/06/19
+
+- Fixed a bug for which time-bounded bestmove searches would return an invalid move.
+
 ## [v1.6.0] - 2025/05/09
 
 - Fixed internal caching of queen neighbors when undoing moves.
