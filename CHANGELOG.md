@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Nothing new.
 
+## [v1.6.2] - 2025/06/25
+
+- Fixed a bug for which time-bounded bestmove searches would crash when finding a winning move.
+
 ## [v1.6.1] - 2025/06/19
 
 - Fixed a bug for which time-bounded bestmove searches would return an invalid move.
@@ -78,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 [Unreleased]: https://github.com/crystal-spider/hivemind
 [README]: https://github.com/crystal-spider/hivemind#readme
 
+[v1.6.2]: https://github.com/crystal-spider/hivemind/releases?q=v1.6.2
 [v1.6.1]: https://github.com/crystal-spider/hivemind/releases?q=v1.6.1
 [v1.6.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.6.0
 [v1.5.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.5.0
