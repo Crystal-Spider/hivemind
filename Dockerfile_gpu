@@ -43,7 +43,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Comando di avvio: lancia il tuo server UHP
-CMD ["python3", "src/engine.py"]
+CMD ["python3", "-u","src/engine.py"]
 
 
 #BUILD: docker build -t hivemind_gpu  . -f Dockerfile_gpu
