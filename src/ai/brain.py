@@ -2,6 +2,7 @@ from typing import Optional
 from random import choice
 from time import sleep, time
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from core.board import Board
 from core.game import Move
 from core.enums import GameState
@@ -97,13 +98,12 @@ class AlphaBetaPruner(Brain):
     try:
       while not max_depth or depth < max_depth:
         depth += 1
-        best_move, score = self._alpha_beta_search(board, max_branching_factor, depth, float('-inf'), float('inf'), start_time, time_limit)
+        best_move, score = self._alpha_beta_search(deepcopy(board), max_branching_factor, depth, float('-inf'), float('inf'), start_time, time_limit)
         scores.append((best_move, score))
         if time_limit and time() - start_time > time_limit:
           break
     except TimeoutError:
-      for _ in range(depth):
-        board.undo()
+      pass
     self._transpos_table.flush()
     print(f"Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}; Time: {time() - start_time}")
     self._visited_nodes = 0
