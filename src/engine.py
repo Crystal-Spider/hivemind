@@ -6,7 +6,6 @@ from core.enums import Command, Option, OptionType, Strategy, PlayerColor
 from core.board import Board
 from core.game import Move
 from ai.brain import Brain, Random, AlphaBetaPruner
-# import cProfile
 
 class Engine:
   """
@@ -367,6 +366,3 @@ class Engine:
 
 if __name__ == "__main__":
   Engine().start()
-  # e = Engine()
-  # e.newgame(["Base+MLP"])
-  # cProfile.run("e.bestmove('depth', '2')")

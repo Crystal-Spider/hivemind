@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- Nothing new.
+- Fix a bug in Spider pathfinding where it could miss valid destination if the path that leads to them was already partially explored by other paths.
+- Add print of the depth reached during $\alpha\text{-}\beta$ pruning.
 
 ## [v1.6.2] - 2025/06/25
 
@@ -55,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [v1.2.0] - 2024/11/29
 
-- Add Minmax with alpha-beta pruning agent.
+- Add Minmax with $\alpha\text{-}\beta$ pruning agent.
 - Minor internal code changes, including minor improvements to Board and its move cache.
 - Added 3 new engine options:
   * `StrategyWhite`  

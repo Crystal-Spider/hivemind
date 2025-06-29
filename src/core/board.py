@@ -545,19 +545,17 @@ class Board:
     :rtype: set[Move]
     """
     destinations: set[Position] = set()
-    visited: set[Position] = set()
-    stack: set[tuple[Position, int]] = {(origin, 0)}
+    stack: set[tuple[Position, int, frozenset[Position]]] = {(origin, 0, frozenset({origin}))}
     unlimited_depth = depth == 0
     while stack:
-      current, current_depth = stack.pop()
-      visited.add(current)
+      current, current_depth, path = stack.pop()
       if unlimited_depth or current_depth == depth:
         destinations.add(current)
       if unlimited_depth or current_depth < depth:
-        stack.update((neighbor, current_depth + 1) for direction in Direction if (neighbor := self._get_neighbor(current, direction)) not in visited and not self.bugs_from_pos(neighbor) and self._check_for_door(origin, current, direction))
+        stack.update((neighbor, current_depth + 1, path | {neighbor}) for direction in Direction if (neighbor := self._get_neighbor(current, direction)) not in path and not self.bugs_from_pos(neighbor) and self._check_no_door(origin, current, direction))
     return {Move(bug, origin, destination) for destination in destinations if destination != origin}
 
-  def _check_for_door(self, origin: Position, position: Position, direction: Direction) -> bool:
+  def _check_no_door(self, origin: Position, position: Position, direction: Direction) -> bool:
     """
     Checks whether a bug piece can slide from origin to position (no door formation).
 
@@ -570,7 +568,7 @@ class Board:
     :return: Whether a bug piece can slide from origin to position.
     :rtype: bool
     """
-    return bool(self.bugs_from_pos((right := self._get_neighbor(position, direction.clockwise)))) != bool(self.bugs_from_pos((left := self._get_neighbor(position, direction.anticlockwise)))) and right != origin != left
+    return (origin in ((right := self._get_neighbor(position, direction.clockwise)), (left := self._get_neighbor(position, direction.anticlockwise)))) == (bool(self.bugs_from_pos(right)) == bool(self.bugs_from_pos(left)))
 
   def _get_beetle_moves(self, bug: Bug, origin: Position, virtual: bool = False) -> set[Move]:
     """
