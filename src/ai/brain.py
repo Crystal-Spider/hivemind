@@ -65,6 +65,7 @@ class Brain(ABC):
     | Might empty more data depending on the agent.
     """
     self._best_move_cache = None
+    
 
 class Random(Brain):
   """
@@ -105,7 +106,8 @@ class AlphaBetaPruner(Brain):
     except TimeoutError:
       pass
     self._transpos_table.flush()
-    print(f"Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}; Time: {time() - start_time}", file=sys.stderr)
+    #print(f"Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}; Time: {time() - start_time}", file=sys.stderr)
+    print(f"Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Depth: {depth}; Time: {time() - start_time}", file=sys.stderr)
     self._visited_nodes = 0
     self._cutoffs = 0
     return board.stringify_move(best_move)
