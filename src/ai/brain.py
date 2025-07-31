@@ -106,8 +106,7 @@ class AlphaBetaPruner(Brain):
     except TimeoutError:
       pass
     self._transpos_table.flush()
-    #print(f"Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}; Time: {time() - start_time}", file=sys.stderr)
-    print(f"Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Depth: {depth}; Time: {time() - start_time}", file=sys.stderr)
+    print(f"Depth: {depth}; Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}; Time: {time() - start_time}", file=sys.stderr)
     self._visited_nodes = 0
     self._cutoffs = 0
     return board.stringify_move(best_move)
@@ -223,11 +222,6 @@ class AlphaBetaPruner(Brain):
         score = 10 * (board.queen_neighbors_by_color(opponent) - board.queen_neighbors_by_color(player))
         # Maximize our own pieces in play and minimize the opponent's.
         score += 2 * (board.pieces_in_play(player) - board.pieces_in_play(opponent))
-        # valid_moves_maximize = node.calculate_valid_moves(current_player, True)
-        # collision_count_max = node.count_moves_near_queen(current_player)
-        # valid_moves_minimize = node.calculate_valid_moves(current_opponent)
-        # collision_count_min = node.count_moves_near_queen(current_opponent)
-        # score = (node.count_queen_neighbors(current_opponent) - node.count_queen_neighbors(current_player)) * 20 + (collision_count_max - collision_count_min) * 20 + (len(valid_moves_maximize) - len(valid_moves_minimize)) // 2
         self._cached_scores[node_hash] = score
     if move:
       board.undo()
