@@ -6,3 +6,4 @@ AI
 
    brain
    table
+   gpt_brain

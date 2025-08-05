@@ -49,9 +49,27 @@ This will create an executable for your platform.
 
 ## AI
 
-There are currently 2 implemented AI strategies:
+There are currently 3 implemented AI strategies:
 
-1. Random: the agent plays random moves.
-2. Minmax: the agent plays moves following a Minmax policy with alpha-beta pruning and a custom node (game state) evaluation.
+1. **Random**: the agent plays random moves.
+2. **Negamax** (formerly Minmax): the agent plays moves following a Negamax policy with alpha-beta pruning and a custom node (game state) evaluation.
+3. **GPT**: the agent uses a fine-tuned GPT model to predict moves and evaluate positions, similar to the ALLIE approach for chess but adapted for Hive.
 
-A third implementation will come in the future that will leverage machine learning.
+### GPT Brain
+
+The GPT brain is a neural network-based AI that learns Hive strategy through fine-tuning on game data. Key features:
+
+- **Architecture**: Decoder-only Transformer based on GPT-2 medium (355M parameters)
+- **Training**: Joint learning of move policy and position evaluation
+- **Input**: Game history as token sequences
+- **Output**: Move probabilities and position values
+
+To use the GPT brain:
+
+1. Install additional dependencies: `pip install torch transformers numpy datasets accelerate`
+2. Train on game data: `python train_gpt.py --use-sample-data`
+3. Use in engine: `from ai.gpt_brain import GPTBrain`
+
+See `GPT_BRAIN_README.md` for detailed documentation.
+
+A third machine learning implementation was planned and has now been realized with the GPT brain.

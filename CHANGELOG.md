@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Add GPT-based AI brain using fine-tuned transformer model for move prediction and position evaluation.
+- Implement HiveGameEncoder for converting game sequences to neural network tokens.
+- Add training infrastructure with HiveGPTTrainer for fine-tuning on game data.
+- Create data processing utilities for converting gamestrings to training format.
+- Add comprehensive documentation and examples for GPT brain usage.
+- Update AI strategy count from 2 to 3 agents (Random, Negamax, GPT).
+- Add PyTorch and Transformers dependencies for neural network functionality.
 - Fix a bug in Spider pathfinding where it could miss valid destination if the path that leads to them was already partially explored by other paths.
 - Add print of the depth reached during $\alpha\text{-}\beta$ pruning.
 

@@ -44,12 +44,13 @@ This will create an executable for your platform.
 AI
 ---
 
-There are currently 2 implemented AI strategies:
+There are currently 3 implemented AI strategies:
 
-1. Random: the agent plays random moves.
-2. Minmax: the agent plays moves following a Minmax policy with alpha-beta pruning and a custom node (game state) evaluation.
+1. **Random**: the agent plays random moves.
+2. **Negamax** (formerly Minmax): the agent plays moves following a Negamax policy with alpha-beta pruning and a custom node (game state) evaluation.
+3. **GPT**: the agent uses a fine-tuned GPT model to predict moves and evaluate positions, similar to the ALLIE approach for chess but adapted for Hive.
 
-A third implementation will come in the future that will leverage machine learning.
+The GPT brain represents a machine learning approach that learns Hive strategy through fine-tuning on game data.
 
 Contents
 --------

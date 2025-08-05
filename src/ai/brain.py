@@ -225,3 +225,14 @@ class AlphaBetaPruner(Brain):
     if move:
       board.undo()
     return score
+
+  def _empty_cache(self) -> None:
+    """
+    | Empties the current cache for the best move.
+    | Might empty more data depending on the agent.
+    """
+    super()._empty_cache()
+    self._pv_table.clear()
+    self._killer_moves.clear()
+    self._history_heuristic.clear()
+    self._cached_scores.clear()
