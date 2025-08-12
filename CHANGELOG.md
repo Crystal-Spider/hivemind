@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- Fix a bug in Spider pathfinding where it could miss valid destination if the path that leads to them was already partially explored by other paths.
-- Add print of the depth reached during $\alpha\text{-}\beta$ pruning.
+- Nothing new.
+
+## [v1.7.0] - 2025/08/dd
+
+- Fixed a bug in Spider pathfinding where it could miss valid destination if the path that leads to them was already partially explored by other paths.
+- Fixed a bug where Mosquito would not copy Pillbug's special moves if it could move.
+- Fixed a bug where moving a queen against the other queen would not compute correctly.
+- Added explicit print of the depth reached during $\alpha\text{-}\beta$ pruning.
+- Now negamax agents return winning moves immediately rather than using up all the available time.
+- Greatly improved evaluation function for negamax agents.
 
 ## [v1.6.2] - 2025/06/25
 
@@ -83,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 [Unreleased]: https://github.com/crystal-spider/hivemind
 [README]: https://github.com/crystal-spider/hivemind#readme
 
+[v1.7.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.7.0
 [v1.6.2]: https://github.com/crystal-spider/hivemind/releases?q=v1.6.2
 [v1.6.1]: https://github.com/crystal-spider/hivemind/releases?q=v1.6.1
 [v1.6.0]: https://github.com/crystal-spider/hivemind/releases?q=v1.6.0

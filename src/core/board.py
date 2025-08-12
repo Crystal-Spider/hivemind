@@ -31,6 +31,16 @@ class Board:
   """
   Offsets of every neighboring tile in each direction.
   """
+  MATERIAL_WEIGHTS: dict[BugType, int] = {
+    BugType.SPIDER: 3,
+    BugType.BEETLE: 2,
+    BugType.GRASSHOPPER: 2,
+    BugType.SOLDIER_ANT: 3,
+    BugType.MOSQUITO: 3,
+    BugType.LADYBUG: 3,
+    BugType.PILLBUG: 1,
+    BugType.QUEEN_BEE: 0
+  }
 
   def __init__(self, gamestring: str = "") -> None:
     """
@@ -79,6 +89,14 @@ class Board:
     self._queen_neighbors_by_color: dict[PlayerColor, QueenNeighbors] = {
       PlayerColor.WHITE: QueenNeighbors(set()),
       PlayerColor.BLACK: QueenNeighbors(set())
+    }
+    self._pieces_in_play: dict[PlayerColor, int] = {
+      PlayerColor.WHITE: 0,
+      PlayerColor.BLACK: 0
+    }
+    self._pieces_scores: dict[PlayerColor, int] = {
+      PlayerColor.WHITE: 0,
+      PlayerColor.BLACK: 0
     }
     self._play_initial_moves(moves)
 
@@ -250,6 +268,9 @@ class Board:
       self._bug_to_pos[move.bug] = move.destination
       if move.origin:
         self._pos_to_bug[move.origin].pop()
+      else:
+        self._pieces_in_play[move.bug.color] += 1
+        self._pieces_scores[move.bug.color] += Board.MATERIAL_WEIGHTS[move.bug.type]
       if move.destination in self._pos_to_bug:
         self._pos_to_bug[move.destination].append(move.bug)
       else:
@@ -325,6 +346,9 @@ class Board:
       self._bug_to_pos[move.bug] = move.origin
       if move.origin:
         self._pos_to_bug[move.origin].append(move.bug)
+      else:
+        self._pieces_in_play[move.bug.color] -= 1
+        self._pieces_scores[move.bug.color] -= Board.MATERIAL_WEIGHTS[move.bug.type]
       if move.bug.type is BugType.QUEEN_BEE:
         self._queen_neighbors_by_color[move.bug.color].neighbors = set()
         self._queen_neighbors_by_color[move.bug.color].count = 0
@@ -379,6 +403,70 @@ class Board:
     """
     return self._queen_neighbors_by_color[color].count
 
+  def queen_attackers_by_color(self, color: PlayerColor) -> int:
+    """
+    Immediate pressure term: number of neighbouring tiles around the queen of `color` that are occupied by *opponent* pieces.
+    Runs in O(6) — negligible in search — and is cached by Zobrist hash in the evaluator, so no explicit memoisation is needed here.
+    """
+    cnt = 0
+    opponent = color.opposite
+    if self._bug_to_pos[Bug(opponent, BugType.QUEEN_BEE)]:
+      for pos in self._queen_neighbors_by_color[opponent].neighbors:
+        if (bugs := self.bugs_from_pos(pos)) and bugs[-1].color is color:
+          cnt += 1
+    return cnt
+
+  def pieces_in_play(self, color: PlayerColor) -> int:
+    """
+    Returns how many pieces are in play for the specified player.
+
+    :param color: Player color.
+    :type color: PlayerColor
+    :return: Amount of pieces in play.
+    :rtype: int
+    """
+    return self._pieces_in_play[color]
+
+  def reachable_queen_tiles(self, color: PlayerColor) -> int:
+    # Optimization: keep the count in a dictionary and update it each time moves are calculated. However, moves are cached, so we'd need a way to update the count when returning to a previous board state.
+    return sum(sum(1 for move in self.calculate_valid_moves() if move.destination == destination and move.bug.color != color) for destination in self._queen_neighbors_by_color[color].neighbors)
+
+  def pinned_pieces(self, color: PlayerColor) -> int:
+    """Number of bugs of *color* that cannot move without breaking the hive."""
+    return sum(1 for pos in self._art_pos if self.bugs_from_pos(pos)[0].color == color)
+
+  def beetle_bonus(self, color: PlayerColor) -> int:
+    """Return a small bonus for Beetles on top of the hive (+1) and an extra point if that Beetle sits *directly* on an opponent piece (+1) and an extra 2 points if that Beetle sits *directly* on the opponent queen (+2)."""
+    # Optimization: keep the count in a dictionary and update it when a Beetle moves.
+    opp_queen_pos = self.pos_from_bug(Bug(color.opposite, BugType.QUEEN_BEE))
+    return sum(int((pos := self.pos_from_bug(Bug(color, BugType.BEETLE, id))) is not None and len((bugs := self.bugs_from_pos(pos))) > 1 and bugs[-1].color == color and bugs[-1].type == BugType.BEETLE) + int(pos is not None and self.bugs_from_pos(pos)[0].color != color) + int(pos == opp_queen_pos) * 2 for id in range(1,3))
+
+  def material_score(self, color: PlayerColor) -> int:
+    """
+    Returns the pieces weight score for the specified player.
+
+    :param color: Player color.
+    :type color: PlayerColor
+    :return: Pieces weight score.
+    :rtype: int
+    """
+    return self._pieces_scores[color]
+
+  def bugs_in_hand(self, color: PlayerColor) -> int:
+    """
+    Returns how many pieces are in hand for the specified player.
+
+    :param color: Player color.
+    :type color: PlayerColor
+    :return: Amount of pieces in hand.
+    :rtype: int
+    """
+    return (len(self._bug_to_pos) >> 1) - self._pieces_in_play[color]
+
+  def movable_piece_count(self, color: PlayerColor) -> int:
+    """Very cheap mobility proxy: count of top-layer pieces that are not pinned."""
+    return sum(1 for bug, pos in self._bug_to_pos.items() if bug.color is color and pos and pos not in self._art_pos and self.bugs_from_pos(pos)[-1] == bug)
+
   def bugs_from_pos(self, position: Position) -> list[Bug]:
     """
     Retrieves the list of bug pieces from the given position.
@@ -400,17 +488,6 @@ class Board:
     :rtype: Optional[Position]
     """
     return self._bug_to_pos.get(bug, None) if bug else None
-
-  def pieces_in_play(self, color: PlayerColor) -> int:
-    """
-    Returns how many pieces are in play for the specified player.
-
-    :param color: Player color.
-    :type color: PlayerColor
-    :return: Amount of pieces in play.
-    :rtype: int
-    """
-    return sum(1 for bug, pos in self._bug_to_pos.items() if bug.color == color and pos)
 
   def hash(self) -> int:
     """

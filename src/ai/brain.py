@@ -218,10 +218,30 @@ class AlphaBetaPruner(Brain):
       if score is None:
         player = board.current_player_color
         opponent = player.opposite
-        # Maximize the neighbors of the opponent's queen and minimize our own queen neighbors.
-        score = 10 * (board.queen_neighbors_by_color(opponent) - board.queen_neighbors_by_color(player))
-        # Maximize our own pieces in play and minimize the opponent's.
-        score += 2 * (board.pieces_in_play(player) - board.pieces_in_play(opponent))
+        # 1) Immediate contact (attackers already placed)
+        contact = board.queen_attackers_by_color(player) - board.queen_attackers_by_color(opponent)
+        # 2) Queen‑liberty difference (distance to defeat)
+        liberties = board.queen_neighbors_by_color(opponent) - board.queen_neighbors_by_color(player)
+        # 3) Reach‑in‑1 empties
+        reach = board.reachable_queen_tiles(opponent) - board.reachable_queen_tiles(player)
+        # 4) Mobility proxy (movable pieces)
+        mobility = board.movable_piece_count(player) - board.movable_piece_count(opponent)
+        # 5) Pinned pieces
+        pinned = board.pinned_pieces(opponent) - board.pinned_pieces(player)
+        # 6) Beetle leverage
+        beetle = board.beetle_bonus(player) - board.beetle_bonus(opponent)
+        # 7) Weighted material already in play
+        material = board.material_score(player) - board.material_score(opponent)
+        # 8) Supply (bugs still in hand)
+        supply = board.bugs_in_hand(opponent) - board.bugs_in_hand(player)
+        # TODO:
+        # Improve efficiency of some metrics method
+        # Other things? THINK
+        score = (10 * (contact + liberties + reach) + 2 * mobility + 4 * pinned + 6 * beetle + material + supply)
+        # # Maximize the neighbors of the opponent's queen and minimize our own queen neighbors.
+        # score = 10 * (board.queen_neighbors_by_color(opponent) - board.queen_neighbors_by_color(player))
+        # # Maximize our own pieces in play and minimize the opponent's.
+        # score += 2 * (board.pieces_in_play(player) - board.pieces_in_play(opponent))
         self._cached_scores[node_hash] = score
     if move:
       board.undo()
