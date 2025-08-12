@@ -1,3 +1,4 @@
+from math import isinf
 from typing import Optional
 from random import choice
 from time import sleep, time
@@ -100,7 +101,7 @@ class AlphaBetaPruner(Brain):
         depth += 1
         best_move, score = self._alpha_beta_search(deepcopy(board), max_branching_factor, depth, float('-inf'), float('inf'), start_time, time_limit)
         scores.append((best_move, score))
-        if time_limit and time() - start_time > time_limit:
+        if (time_limit and time() - start_time > time_limit) or (isinf(score) and score > 0):
           break
     except TimeoutError:
       pass
@@ -205,7 +206,7 @@ class AlphaBetaPruner(Brain):
     score = 0
     if move:
       board.play_parsed(move)
-    if (board.state is GameState.DRAW or board.state is GameState.NOT_STARTED):
+    if board.state is GameState.DRAW or board.state is GameState.NOT_STARTED:
       score = 0
     elif board.current_player_has_won:
       score = float('inf')
