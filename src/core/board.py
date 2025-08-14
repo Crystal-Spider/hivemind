@@ -261,17 +261,16 @@ class Board:
           neighbor = self._get_neighbor(move.destination, direction)
           self._queen_neighbors_by_color[move.bug.color].neighbors.add(neighbor)
           self._queen_neighbors_by_color[move.bug.color].count += bool(self.bugs_from_pos(neighbor))
-      else:
-        if len(self.bugs_from_pos(move.destination)) == 1:
-          if move.destination in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
-            self._queen_neighbors_by_color[PlayerColor.WHITE].count += 1
-          elif move.destination in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
-            self._queen_neighbors_by_color[PlayerColor.BLACK].count += 1
-        if move.origin and not self.bugs_from_pos(move.origin):
-          if move.origin in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
-            self._queen_neighbors_by_color[PlayerColor.WHITE].count -= 1
-          elif move.origin in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
-            self._queen_neighbors_by_color[PlayerColor.BLACK].count -= 1
+      if len(self.bugs_from_pos(move.destination)) == 1:
+        if move.destination in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
+          self._queen_neighbors_by_color[PlayerColor.WHITE].count += 1
+        if move.destination in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
+          self._queen_neighbors_by_color[PlayerColor.BLACK].count += 1
+      if move.origin and not self.bugs_from_pos(move.origin):
+        if move.origin in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
+          self._queen_neighbors_by_color[PlayerColor.WHITE].count -= 1
+        if move.origin in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
+          self._queen_neighbors_by_color[PlayerColor.BLACK].count -= 1
       white_queen_surrounded = self._queen_neighbors_by_color[PlayerColor.WHITE].count == 6
       black_queen_surrounded = self._queen_neighbors_by_color[PlayerColor.BLACK].count == 6
       if black_queen_surrounded and white_queen_surrounded:
@@ -334,17 +333,16 @@ class Board:
             neighbor = self._get_neighbor(move.origin, direction)
             self._queen_neighbors_by_color[move.bug.color].neighbors.add(neighbor)
             self._queen_neighbors_by_color[move.bug.color].count += bool(self.bugs_from_pos(neighbor))
-      else:
-        if move.origin and len(self.bugs_from_pos(move.origin)) == 1:
-          if move.origin in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
-            self._queen_neighbors_by_color[PlayerColor.WHITE].count += 1
-          elif move.origin in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
-            self._queen_neighbors_by_color[PlayerColor.BLACK].count += 1
-        if not self.bugs_from_pos(move.destination):
-          if move.destination in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
-            self._queen_neighbors_by_color[PlayerColor.WHITE].count -= 1
-          elif move.destination in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
-            self._queen_neighbors_by_color[PlayerColor.BLACK].count -= 1
+      if move.origin and len(self.bugs_from_pos(move.origin)) == 1:
+        if move.origin in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
+          self._queen_neighbors_by_color[PlayerColor.WHITE].count += 1
+        if move.origin in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
+          self._queen_neighbors_by_color[PlayerColor.BLACK].count += 1
+      if not self.bugs_from_pos(move.destination):
+        if move.destination in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
+          self._queen_neighbors_by_color[PlayerColor.WHITE].count -= 1
+        if move.destination in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
+          self._queen_neighbors_by_color[PlayerColor.BLACK].count -= 1
 
   def stringify_move(self, move: Optional[Move]) -> str:
     """
