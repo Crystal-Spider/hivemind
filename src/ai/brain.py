@@ -8,7 +8,7 @@ from core.board import Board
 from core.game import Move
 from core.enums import GameState
 from ai.table import TranspositionTable, TranspositionTableEntry, TranspositionTableEntryType, ScoreTable
-
+import sys
 class Brain(ABC):
   """
   Base abstract class for AI agents.
@@ -66,6 +66,7 @@ class Brain(ABC):
     | Might empty more data depending on the agent.
     """
     self._best_move_cache = None
+    
 
 class Random(Brain):
   """
@@ -106,7 +107,7 @@ class AlphaBetaPruner(Brain):
     except TimeoutError:
       pass
     self._transpos_table.flush()
-    print(f"Depth: {depth}; Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}; Time: {time() - start_time}")
+    print(f"Depth: {depth}; Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}; Time: {time() - start_time}", file=sys.stderr)
     self._visited_nodes = 0
     self._cutoffs = 0
     return board.stringify_move(best_move)
