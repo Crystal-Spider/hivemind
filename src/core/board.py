@@ -236,6 +236,7 @@ class Board:
       self._draw_counter[self.hash()] += 1
       if self._draw_counter[self.hash()] > 2:
         self.state = GameState.DRAW
+        self.gameover = True
       return self
     raise ValueError(f"You can't {"play" if move else Move.PASS} when the game is over")
 
