@@ -34,11 +34,11 @@ class Engine:
   """
   Map for strategies and the respective brain.
   """
-  DEFAULT_STRATEGY_WHITE: Final[Strategy] = Strategy.NEGAMAX
+  DEFAULT_STRATEGY_WHITE: Final[Strategy] = Strategy.NEGAMAX_SIMPLE
   """
   Default value for option StrategyWhite.
   """
-  DEFAULT_STRATEGY_BLACK: Final[Strategy] = Strategy.NEGAMAX
+  DEFAULT_STRATEGY_BLACK: Final[Strategy] = Strategy.NEGAMAX_SIMPLE
   """
   Default value for option StrategyBlack.
   """

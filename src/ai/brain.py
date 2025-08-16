@@ -67,7 +67,6 @@ class Brain(ABC):
     | Might empty more data depending on the agent.
     """
     self._best_move_cache = None
-    
 
 class Random(Brain):
   """
