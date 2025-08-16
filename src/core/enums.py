@@ -110,6 +110,7 @@ class Strategy(StrEnum):
   """
   Negamax with alpha-beta pruning strategy.
   """
+  NEGAMAX_SIMPLE = "NegamaxSimple"
 
 class PlayerColor(StrEnum):
   """

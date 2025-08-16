@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Removed debug prints from $\alpha\text{-}\beta$ pruning.
 - Now negamax agents return winning moves immediately rather than using up all the available time.
 - Now negamax agents cache is ignored if repeating the cached move would result in a draw by repetition.
-- Greatly improved evaluation function for negamax agents.
+- Added new negamax agents with a different evaluation function.
 
 ## [v1.6.2] - 2025/06/25
 

@@ -276,13 +276,6 @@ class Board:
         self._pos_to_bug[move.destination].append(move.bug)
       else:
         self._pos_to_bug[move.destination] = [move.bug]
-      if move.bug.type is BugType.QUEEN_BEE:
-        self._queen_neighbors_by_color[move.bug.color].neighbors = set()
-        self._queen_neighbors_by_color[move.bug.color].count = 0
-        for direction in Direction:
-          neighbor = self._get_neighbor(move.destination, direction)
-          self._queen_neighbors_by_color[move.bug.color].neighbors.add(neighbor)
-          self._queen_neighbors_by_color[move.bug.color].count += bool(self.bugs_from_pos(neighbor))
       if len(self.bugs_from_pos(move.destination)) == 1:
         if move.destination in self._queen_neighbors_by_color[PlayerColor.WHITE].neighbors:
           self._queen_neighbors_by_color[PlayerColor.WHITE].count += 1
@@ -293,6 +286,13 @@ class Board:
           self._queen_neighbors_by_color[PlayerColor.WHITE].count -= 1
         if move.origin in self._queen_neighbors_by_color[PlayerColor.BLACK].neighbors:
           self._queen_neighbors_by_color[PlayerColor.BLACK].count -= 1
+      if move.bug.type is BugType.QUEEN_BEE:
+        self._queen_neighbors_by_color[move.bug.color].neighbors = set()
+        self._queen_neighbors_by_color[move.bug.color].count = 0
+        for direction in Direction:
+          neighbor = self._get_neighbor(move.destination, direction)
+          self._queen_neighbors_by_color[move.bug.color].neighbors.add(neighbor)
+          self._queen_neighbors_by_color[move.bug.color].count += bool(self.bugs_from_pos(neighbor))
       white_queen_surrounded = self._queen_neighbors_by_color[PlayerColor.WHITE].count == 6
       black_queen_surrounded = self._queen_neighbors_by_color[PlayerColor.BLACK].count == 6
       if black_queen_surrounded and white_queen_surrounded:
@@ -434,7 +434,7 @@ class Board:
 
   def pinned_pieces(self, color: PlayerColor) -> int:
     """Number of bugs of *color* that cannot move without breaking the hive."""
-    return sum(1 for pos in self._art_pos if self.bugs_from_pos(pos)[0].color == color)
+    return sum(1 for pos in self._art_pos if (bugs := self.bugs_from_pos(pos)) and bugs[0].color == color)
 
   def beetle_bonus(self, color: PlayerColor) -> int:
     """Return a small bonus for Beetles on top of the hive (+1) and an extra point if that Beetle sits *directly* on an opponent piece (+1) and an extra 2 points if that Beetle sits *directly* on the opponent queen (+2)."""
@@ -489,6 +489,15 @@ class Board:
     :rtype: Optional[Position]
     """
     return self._bug_to_pos.get(bug, None) if bug else None
+
+  def repetition_count(self) -> int:
+    """
+    Returns the count of how many times the current board state has been seen during the current game.
+
+    :return: Repetition counter.
+    :rtype: int
+    """
+    return self._draw_counter[self.hash()]
 
   def hash(self) -> int:
     """

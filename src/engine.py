@@ -5,7 +5,7 @@ from copy import deepcopy
 from core.enums import Command, Option, OptionType, Strategy, PlayerColor
 from core.board import Board
 from core.game import Move
-from ai.brain import Brain, Random, AlphaBetaPruner
+from ai.brain import Brain, Random, AlphaBetaPruner, AlphaBetaPrunerSimple
 
 class Engine:
   """
@@ -28,16 +28,17 @@ class Engine:
 
   BRAINS: Final[dict[Strategy, Callable[[], Brain]]] = {
     Strategy.RANDOM: Random,
-    Strategy.NEGAMAX: AlphaBetaPruner
+    Strategy.NEGAMAX: AlphaBetaPruner,
+    Strategy.NEGAMAX_SIMPLE: AlphaBetaPrunerSimple
   }
   """
   Map for strategies and the respective brain.
   """
-  DEFAULT_STRATEGY_WHITE: Final[Strategy] = Strategy.NEGAMAX
+  DEFAULT_STRATEGY_WHITE: Final[Strategy] = Strategy.NEGAMAX_SIMPLE
   """
   Default value for option StrategyWhite.
   """
-  DEFAULT_STRATEGY_BLACK: Final[Strategy] = Strategy.NEGAMAX
+  DEFAULT_STRATEGY_BLACK: Final[Strategy] = Strategy.NEGAMAX_SIMPLE
   """
   Default value for option StrategyBlack.
   """

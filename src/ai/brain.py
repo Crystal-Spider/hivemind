@@ -8,6 +8,7 @@ from core.board import Board
 from core.game import Move
 from core.enums import GameState
 from ai.table import TranspositionTable, TranspositionTableEntry, TranspositionTableEntryType, ScoreTable
+import json
 
 class Brain(ABC):
   """
@@ -35,7 +36,7 @@ class Brain(ABC):
     :return: Stringified best move.
     :rtype: str
     """
-    if not self._best_move_cache or self._last_hash != board.hash() or self._last_max_depth != max_depth or self._last_time_limit != time_limit:
+    if not self._best_move_cache or self._last_hash != board.hash() or self._last_max_depth != max_depth or self._last_time_limit != time_limit or board.repetition_count() == 2:
       self._empty_cache()
       self._last_max_depth = max_depth
       self._last_time_limit = time_limit
@@ -90,6 +91,24 @@ class AlphaBetaPruner(Brain):
     self._cached_scores: ScoreTable = ScoreTable()
     self._visited_nodes: int = 0
     self._cutoffs: int = 0
+    self.weights = [10, 10, 10, 2, 4, 6, 1, 1]
+
+  def set_linear_weights(self, w: list[float]) -> None:
+    if len(w) != 8:
+      raise ValueError("expected 8 weights")
+    self._weights = [float(v) for v in w]
+    # invalidate all caches so scores reflect new weights
+    self._cached_scores = ScoreTable()
+    self._transpos_table.flush()
+    self._pv_table.clear()
+    self._history_heuristic.clear()
+    self._killer_moves.clear()
+
+  def set_weights_from_json(self, path: str) -> None:
+    with open(path, "r", encoding="utf-8") as f:
+      obj = json.load(f)
+    w = obj.get("weights", obj)
+    self.set_linear_weights(w)
 
   def _find_best_move(self, board: Board, max_branching_factor: int, max_depth: int = 0, time_limit: int = 0) -> str:
     start_time = time()
@@ -136,10 +155,11 @@ class AlphaBetaPruner(Brain):
 
     best_move = self._pv_table.get(node_hash, None)
     moves = list(board.calculate_valid_moves())
-    moves.sort(key=lambda m: self._move_order_heuristic(board, m, best_move, depth), reverse=True)
+    moves.sort(key=lambda m: self._move_order_heuristic(m, best_move, depth), reverse=True)
     if len(moves) > max_branching_factor:
       del moves[max_branching_factor:]
 
+    alpha0 = alpha
     best_value = float('-inf')
     for move in moves:
       board.play_parsed(move)
@@ -154,14 +174,20 @@ class AlphaBetaPruner(Brain):
         self._cutoffs += 1
         self._store_killer_move(depth, move)
         break
-    entry_type = TranspositionTableEntryType.EXACT if best_value < beta else TranspositionTableEntryType.LOWER_BOUND if best_value > alpha else TranspositionTableEntryType.UPPER_BOUND
+    if best_value <= alpha0:
+      entry_type = TranspositionTableEntryType.UPPER_BOUND
+    elif best_value >= beta:
+      entry_type = TranspositionTableEntryType.LOWER_BOUND
+    else:
+      entry_type = TranspositionTableEntryType.EXACT
+    # entry_type = TranspositionTableEntryType.EXACT if best_value < beta else TranspositionTableEntryType.LOWER_BOUND if best_value > alpha0 else TranspositionTableEntryType.UPPER_BOUND
     self._transpos_table[node_hash] = TranspositionTableEntry(entry_type, best_value, depth, best_move)
     if best_move:
       self._pv_table[node_hash] = best_move
       self._update_history_heuristic(best_move, depth)
     return best_move, best_value
 
-  def _move_order_heuristic(self, board: Board, move: Move, best_move: Optional[Move], depth: int) -> tuple[float, int]:
+  def _move_order_heuristic(self, move: Move, best_move: Optional[Move], depth: int) -> tuple[float, int]:
     """
     | Assigns a heuristic value to moves for ordering.
     | Higher values indicate better moves.
@@ -170,7 +196,7 @@ class AlphaBetaPruner(Brain):
       return (float('inf'), 1) # Prioritize PV move.
     if move in self._killer_moves.get(depth, []):
       return (float('inf'), 0) # Prioritize killer moves.
-    return (self._history_heuristic.get(move, self._evaluate(board, move)), 0) # Fallback to history heuristic or explicit board evaluation.
+    return (self._history_heuristic.get(move, 0), 0) # Fallback to history heuristic.
 
   def _store_killer_move(self, depth: int, move: Move) -> None:
     """
@@ -234,14 +260,41 @@ class AlphaBetaPruner(Brain):
         material = board.material_score(player) - board.material_score(opponent)
         # 8) Supply (bugs still in hand)
         supply = board.bugs_in_hand(opponent) - board.bugs_in_hand(player)
-        # TODO:
-        # Improve efficiency of some metrics method
-        # Other things? THINK
-        score = (10 * (contact + liberties + reach) + 2 * mobility + 4 * pinned + 6 * beetle + material + supply)
+        score = (self.weights[0] * contact + self.weights[1] * liberties + self.weights[2] * reach + self.weights[3] * mobility + self.weights[4] * pinned + self.weights[5] * beetle + self.weights[6] * material + self.weights[7] * supply)
+        self._cached_scores[node_hash] = score
+    if move:
+      board.undo()
+    return score
+
+class AlphaBetaPrunerSimple(AlphaBetaPruner):
+  def _evaluate(self, board: Board, move: Optional[Move]) -> float:
+    """
+    Evaluates the given node.
+
+    :param node: Playing board.
+    :type node: Board
+    :return: Node value.
+    :rtype: float
+    """
+    score = 0
+    if move:
+      board.play_parsed(move)
+    if board.state is GameState.DRAW or board.state is GameState.NOT_STARTED:
+      score = 0
+    elif board.current_player_has_won:
+      score = float('inf')
+    elif board.current_opponent_has_won:
+      score = float('-inf')
+    else:
+      node_hash = board.hash()
+      score = self._cached_scores[node_hash]
+      if score is None:
+        player = board.current_player_color
+        opponent = player.opposite
         # # Maximize the neighbors of the opponent's queen and minimize our own queen neighbors.
-        # score = 10 * (board.queen_neighbors_by_color(opponent) - board.queen_neighbors_by_color(player))
+        score = 10 * (board.queen_neighbors_by_color(opponent) - board.queen_neighbors_by_color(player))
         # # Maximize our own pieces in play and minimize the opponent's.
-        # score += 2 * (board.pieces_in_play(player) - board.pieces_in_play(opponent))
+        score += 2 * (board.pieces_in_play(player) - board.pieces_in_play(opponent))
         self._cached_scores[node_hash] = score
     if move:
       board.undo()
