@@ -103,7 +103,7 @@ class _Validator:
     if rec.get("ply_count") != len(rec["moves"]):
       return False, "ply_count mismatch"
 
-    b = Board()
+    b = Board("Base+MLP")
     for i, mv in enumerate(rec["moves"]):
       legal = b.valid_moves.split(";")
       if mv not in legal:
@@ -129,7 +129,7 @@ def validate_jsonl(path: str, sample: int = 0) -> int:
       return io.TextIOWrapper(gzip.open(p, "rb"), encoding="utf-8")
     open_fn = _open
   else:
-    open_fn = lambda p: open(p, "r", encoding="utf-8")  # type: ignore[assignment]
+    open_fn = lambda p: open(p, "r", encoding="utf-8")
 
   rng = random.Random(0)
   n_bad = 0
