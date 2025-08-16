@@ -107,7 +107,7 @@ class AlphaBetaPruner(Brain):
     except TimeoutError:
       pass
     self._transpos_table.flush()
-    print(f"Depth: {depth}; Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}; Time: {time() - start_time}", file=sys.stderr)
+    # print(f"Depth: {depth}; Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}; Time: {time() - start_time}")
     self._visited_nodes = 0
     self._cutoffs = 0
     return board.stringify_move(best_move)
