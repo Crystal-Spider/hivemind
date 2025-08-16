@@ -490,6 +490,15 @@ class Board:
     """
     return self._bug_to_pos.get(bug, None) if bug else None
 
+  def repetition_count(self) -> int:
+    """
+    Returns the count of how many times the current board state has been seen during the current game.
+
+    :return: Repetition counter.
+    :rtype: int
+    """
+    return self._draw_counter[self.hash()]
+
   def hash(self) -> int:
     """
     Returns the current Zobrist Hash value.

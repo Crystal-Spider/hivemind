@@ -36,7 +36,7 @@ class Brain(ABC):
     :return: Stringified best move.
     :rtype: str
     """
-    if not self._best_move_cache or self._last_hash != board.hash() or self._last_max_depth != max_depth or self._last_time_limit != time_limit:
+    if not self._best_move_cache or self._last_hash != board.hash() or self._last_max_depth != max_depth or self._last_time_limit != time_limit or board.repetition_count() == 2:
       self._empty_cache()
       self._last_max_depth = max_depth
       self._last_time_limit = time_limit
