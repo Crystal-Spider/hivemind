@@ -8,6 +8,7 @@ from core.board import Board
 from core.game import Move
 from core.enums import GameState
 from ai.table import TranspositionTable, TranspositionTableEntry, TranspositionTableEntryType, ScoreTable
+import json
 
 class Brain(ABC):
   """
@@ -91,6 +92,24 @@ class AlphaBetaPruner(Brain):
     self._cached_scores: ScoreTable = ScoreTable()
     self._visited_nodes: int = 0
     self._cutoffs: int = 0
+    self.weights = [10, 10, 10, 2, 4, 6, 1, 1]
+
+  def set_linear_weights(self, w: list[float]) -> None:
+    if len(w) != 8:
+      raise ValueError("expected 8 weights")
+    self._weights = [float(v) for v in w]
+    # invalidate all caches so scores reflect new weights
+    self._cached_scores = ScoreTable()
+    self._transpos_table.flush()
+    self._pv_table.clear()
+    self._history_heuristic.clear()
+    self._killer_moves.clear()
+
+  def set_weights_from_json(self, path: str) -> None:
+    with open(path, "r", encoding="utf-8") as f:
+      obj = json.load(f)
+    w = obj.get("weights", obj)
+    self.set_linear_weights(w)
 
   def _find_best_move(self, board: Board, max_branching_factor: int, max_depth: int = 0, time_limit: int = 0) -> str:
     start_time = time()
@@ -107,7 +126,7 @@ class AlphaBetaPruner(Brain):
     except TimeoutError:
       pass
     self._transpos_table.flush()
-    print(f"Depth: {depth}; Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}; Time: {time() - start_time}")
+    # print(f"Depth: {depth}; Visited nodes: {self._visited_nodes}; Cutoffs: {self._cutoffs}; Scores: {scores}; Time: {time() - start_time}")
     self._visited_nodes = 0
     self._cutoffs = 0
     return board.stringify_move(best_move)
@@ -137,7 +156,7 @@ class AlphaBetaPruner(Brain):
 
     best_move = self._pv_table.get(node_hash, None)
     moves = list(board.calculate_valid_moves())
-    moves.sort(key=lambda m: self._move_order_heuristic(board, m, best_move, depth), reverse=True)
+    moves.sort(key=lambda m: self._move_order_heuristic(m, best_move, depth), reverse=True)
     if len(moves) > max_branching_factor:
       del moves[max_branching_factor:]
 
@@ -169,7 +188,7 @@ class AlphaBetaPruner(Brain):
       self._update_history_heuristic(best_move, depth)
     return best_move, best_value
 
-  def _move_order_heuristic(self, board: Board, move: Move, best_move: Optional[Move], depth: int) -> tuple[float, int]:
+  def _move_order_heuristic(self, move: Move, best_move: Optional[Move], depth: int) -> tuple[float, int]:
     """
     | Assigns a heuristic value to moves for ordering.
     | Higher values indicate better moves.
@@ -242,7 +261,7 @@ class AlphaBetaPruner(Brain):
         material = board.material_score(player) - board.material_score(opponent)
         # 8) Supply (bugs still in hand)
         supply = board.bugs_in_hand(opponent) - board.bugs_in_hand(player)
-        score = (10 * contact + 10 * liberties + 10 * reach + 2 * mobility + 4 * pinned + 6 * beetle + 1 * material + 1 * supply)
+        score = (self.weights[0] * contact + self.weights[1] * liberties + self.weights[2] * reach + self.weights[3] * mobility + self.weights[4] * pinned + self.weights[5] * beetle + self.weights[6] * material + self.weights[7] * supply)
         self._cached_scores[node_hash] = score
     if move:
       board.undo()
