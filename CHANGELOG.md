@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- Fix a bug in Spider pathfinding where it could miss valid destination if the path that leads to them was already partially explored by other paths.
-- Add print of the depth reached during $\alpha\text{-}\beta$ pruning.
+- Nothing new.
+
+## [v1.7.0] - 2025/08/dd
+
+- Fixed a bug in Spider pathfinding where it could miss valid destination if the path that leads to them was already partially explored by other paths.
+- Fixed a bug where Mosquito would not copy Pillbug's special moves if it could move.
+- Fixed a bug where moving a queen against the other queen would not compute correctly.
+- Fixed a bug where draw by repetition wouldn't correctly set the gameover flag.
+- Added explicit print of the depth reached during $\alpha\text{-}\beta$ pruning (commented out).
+- Removed debug prints from $\alpha\text{-}\beta$ pruning.
+- Now negamax agents return winning moves immediately rather than using up all the available time.
+- Now negamax agents cache is ignored if repeating the cached move would result in a draw by repetition.
+- Greatly improved evaluation function for negamax agents.
 
 ## [v1.6.2] - 2025/06/25
 
