@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 # 2-space indentation, strict typing
 import argparse
+import csv
 import gzip
 import io
 import json
 import sys
 from pathlib import Path
-from typing import Iterable, Optional, Any
+from typing import Iterable, Optional, Any, List
+from dataclasses import dataclass
 
 """
-Convert a TXT file of UHP GameStrings (one per line) into a JSONL(.gz)
+Convert a CSV of UHP GameStrings into a JSONL(.gz)
 with the same schema used by scripts/selfplay_to_jsonl.py:
 
   {
@@ -17,16 +19,21 @@ with the same schema used by scripts/selfplay_to_jsonl.py:
     "moves": [str, ...],          # UHP move strings played in order (including 'pass')
     "result": "W"|"B"|"D"|null,   # from side to move perspective
     "ply_count": int,
-    "meta": {"source": "uhp_txt_to_jsonl", "line_no": int}
+    "meta": {"source": "uhp_csv_to_jsonl", "row_no": int, "file": Optional[str]}
   }
 
+CSV format (like the provided sample):
+- No header.
+- Column 0: a filename/id (e.g., "HV-... .sgf").
+- Column 1: the full UHP GameString.
+
 Usage:
-  python scripts/uhp_txt_to_jsonl.py --in data/games.txt --out data/selfplay.jsonl.gz
+  python scripts/uhp_to_jsonl.py --in data/hive_games_2025_working.csv --out data/from_csv.jsonl.gz
 
 Notes:
-- Lines that fail to parse/play are logged into <out>-errors.txt
-  (each error: the original line, then the exception, blank line).
-- Blank/comment lines (#...) are ignored.
+- Rows that fail to parse/play are logged into <out>-errors.txt
+  (each error: the original GameString, then the exception, blank line).
+- You can override column indexes and header presence with flags.
 """
 
 # ----------------- Import engine from ./src -----------------
@@ -99,23 +106,33 @@ class JsonlWriter:
 
 
 # ---------------------------- Main --------------------------------
-class Args(argparse.Namespace):
+@dataclass(slots=True)
+class Args:
   inp: str
   out: Optional[str]
   errors: Optional[str]
+  col_gs: int
+  col_file: Optional[int]
+  header: bool
 
 
 def parse_args(argv: Optional[Iterable[str]] = None) -> Args:
-  p = argparse.ArgumentParser(description="Convert TXT (UHP GameStrings) → JSONL(.gz)")
-  p.add_argument("--in", dest="inp", required=True, help="input .txt with one GameString per line")
+  p = argparse.ArgumentParser(description="Convert CSV (UHP GameStrings) → JSONL(.gz)")
+  p.add_argument("--in", dest="inp", required=True, help="input .csv (no header by default)")
   p.add_argument("--out", default=None, help="output .jsonl(.gz); default = input name with .jsonl.gz")
   p.add_argument("--errors", default=None, help="errors output .txt; default = <out>-errors.txt")
-  return p.parse_args(list(argv) if argv is not None else None)  # type: ignore[return-value]
+  p.add_argument("--col-gs", dest="col_gs", type=int, default=1, help="0-based index of the GameString column (default 1)")
+  p.add_argument("--col-file", dest="col_file", type=int, default=0, help="0-based index of the filename/id column (default 0); set to -1 to disable")
+  p.add_argument("--header", action="store_true", help="set if the CSV has a header row to skip")
+  a = p.parse_args(list(argv) if argv is not None else None)
+  col_file: Optional[int] = a.col_file if a.col_file >= 0 else None
+  return Args(inp=a.inp, out=a.out, errors=a.errors, col_gs=a.col_gs, col_file=col_file, header=a.header)
+
 
 
 def _default_out(inp: Path) -> Path:
   name = inp.name
-  if name.endswith(".txt"):
+  if name.endswith(".csv"):
     name = name[:-4]
   return inp.with_name(name + ".jsonl.gz")
 
@@ -130,7 +147,7 @@ def _error_path(out_path: Path, explicit: Optional[str]) -> Path:
   return out_path.with_name(f"{name}-errors.txt")
 
 
-def convert(inp: Path, out_path: Path, err_path: Path) -> int:
+def convert_csv(inp: Path, out_path: Path, err_path: Path, col_gs: int, col_file: Optional[int], has_header: bool) -> int:
   total = 0
   ok = 0
   err_fh: Optional[io.TextIOWrapper] = None
@@ -141,16 +158,28 @@ def convert(inp: Path, out_path: Path, err_path: Path) -> int:
   except OSError:
     err_fh = None
 
-  with open(inp, "r", encoding="utf-8", errors="strict") as f:
-    for ln, line in enumerate(f, start=1):
-      s = line.strip()
-      if not s or s.startswith("#"):
+  with open(inp, "r", encoding="utf-8", newline="") as f:
+    rd = csv.reader(f)
+    row_no = 0
+    if has_header:
+      try:
+        next(rd)
+      except StopIteration:
+        pass
+    for row in rd:
+      row_no += 1
+      if not row:
+        continue
+      if col_gs >= len(row):
+        continue
+      s = (row[col_gs] or "").strip()
+      if not s:
         continue
       total += 1
       try:
         # Build moves by playing segments that are actual moves.
         b = Board()
-        moves: list[str] = []
+        moves: List[str] = []
         for seg in _split_uhp_gamestring(s):
           try:
             b.play(seg)
@@ -160,12 +189,15 @@ def convert(inp: Path, out_path: Path, err_path: Path) -> int:
             continue
         # Canonicalize GameString and result
         canon = str(b)
-        rec: dict[str, Any]= {
+        meta: dict[str, Any] = {"source": "uhp_csv_to_jsonl", "row_no": row_no}
+        if col_file is not None and col_file < len(row):
+          meta["file"] = row[col_file]
+        rec: dict[str, Any] = {
           "game_string": canon,
           "moves": moves,
           "result": _map_result(b.state),
           "ply_count": len(moves),
-          "meta": {"source": "uhp_txt_to_jsonl", "line_no": ln},
+          "meta": meta,
         }
         writer.write(rec)
         ok += 1
@@ -175,7 +207,6 @@ def convert(inp: Path, out_path: Path, err_path: Path) -> int:
             err_fh.write(s + "\n" + repr(e) + "\n\n")
           except OSError:
             pass
-        # continue with next line
         continue
 
   writer.close()
@@ -197,7 +228,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
   outp = Path(args.out).resolve() if args.out else _default_out(inp)
   outp.parent.mkdir(parents=True, exist_ok=True)
   errp = _error_path(outp, args.errors)
-  rc = convert(inp, outp, errp)
+  rc = convert_csv(inp, outp, errp, args.col_gs, args.col_file, args.header)
   return rc
 
 
