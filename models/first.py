@@ -18,6 +18,7 @@ import json
 import math
 import os
 import random
+import time
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
 
@@ -38,7 +39,7 @@ from ai.brain import AlphaBetaPruner
 from engine import Engine
 
 # ---------------------------- Tokenizer ---------------------------------
-SPECIALS = {"<pad>": 0, "<bos>": 1, "<eos>": 2, "<unk>": 3, "<resign>": 4}
+SPECIALS = {"<pad>": 0, "<bos>": 1, "<eos>": 2, "<unk>": 3}
 
 class MoveTokenizer:
   def __init__(self, vocab: dict[str, int]):
@@ -48,7 +49,6 @@ class MoveTokenizer:
     self.bos_id = SPECIALS["<bos>"]
     self.eos_id = SPECIALS["<eos>"]
     self.unk_id = SPECIALS["<unk>"]
-    self.resign_id = SPECIALS["<resign>"]
 
   def encode_moves(self, moves: Sequence[str], add_bos: bool = True, add_eos: bool = True) -> list[int]:
     ids: list[int] = []
@@ -218,9 +218,11 @@ class PolicyValueTransformer(nn.Module):
 # --------------------------- Legality mask -------------------------------
 class HiveEnv:
   def __init__(self) -> None:
-    self.b = Board()
+    self.b = Board("Base+MLP")
+  def gamestring(self) -> str:
+    return str(self.b)
   def reset(self, gamestring: str = "") -> None:
-    self.b = Board(gamestring) if gamestring else Board()
+    self.b = Board(gamestring or "Base+MLP")
   def legal_moves(self) -> list[str]:
     ms = self.b.calculate_valid_moves()
     return sorted(self.b.stringify_move(m) for m in ms) if ms else ["pass"]
@@ -268,8 +270,8 @@ class MCTS:
       logits, v, _ = self.model(x)
     legals = env.legal_moves()
     legal_ids = [self.tok.stoi.get(m, self.tok.unk_id) for m in legals]
-    masked = mask_logits_with_legals(logits[:, -1, :], legal_ids)
-    probs = torch.softmax(masked, dim=-1).squeeze(0)
+    logits_legal = logits[:, -1, legal_ids]
+    probs = torch.softmax(logits_legal, dim=-1).squeeze(0)
     return probs, float(v[0, -1].item()), legal_ids
   def select_move(self, env: HiveEnv, gamestring: str, temperature: float = 1.0) -> str:
     env.reset(gamestring)
@@ -277,14 +279,16 @@ class MCTS:
     N: dict[int, int] = {}
     W: dict[int, float] = {}
     probs, _v_root, legal_ids = self._policy_value(env, prefix_ids)
+    if not legal_ids:
+      return "pass"
     P = probs.clone()
     if len(legal_ids) > 1 and self.conf.root_noise > 0:
       noise = torch.distributions.Dirichlet(torch.full((len(P),), self.conf.dirichlet_alpha)).sample().to(P)
       P = (1 - self.conf.root_noise) * P + self.conf.root_noise * noise
     for _ in range(self.conf.n):
       best_a = None; best_score = -1e9
-      sumN = sum(N.get(i, 0) for i in range(len(P))) + 1
-      for aid in range(len(P)):
+      sumN = sum(N.get(i, 0) for i in range(len(legal_ids))) + 1
+      for aid in range(len(legal_ids)):
         p = float(P[aid].item()); n = N.get(aid, 0)
         q = W.get(aid, 0.0) / n if n > 0 else 0.0
         u = self.conf.cpuct * p * math.sqrt(sumN) / (1 + n)
@@ -294,21 +298,52 @@ class MCTS:
       assert best_a is not None
       move_id = best_a
       move_str = self.tok.itos.get(legal_ids[move_id], "<unk>")
-      env2 = HiveEnv(); env2.reset(gamestring)
-      env2.play(move_str)
-      ids2 = [self.tok.bos_id]
-      _p2, v2, _ = self._policy_value(env2, ids2)
+      env2 = HiveEnv(); env2.reset(gamestring); env2.play(move_str)
+      _, v2, _ = self._policy_value(env2, [self.tok.bos_id])
       N[best_a] = N.get(best_a, 0) + 1
       W[best_a] = W.get(best_a, 0.0) + v2
-    counts = torch.tensor([N.get(i, 0) for i in range(len(P))], dtype=torch.float32)
+    counts = torch.tensor([N.get(i, 0) for i in range(len(legal_ids))], dtype=torch.float32)
     if counts.numel() == 0 or counts.sum() == 0:
-      probs = torch.softmax(P, dim=-1)
-      choice = torch.multinomial(probs.pow(1.0/temperature), 1).item()
+      choice = torch.multinomial(torch.softmax(P, dim=-1).pow(1.0/max(1e-9,temperature)), 1).item()
     else:
-      if temperature > 0:
-        choice = torch.multinomial((counts + 1e-6).pow(1.0/temperature), 1).item()
-      else:
-        choice = torch.argmax(counts).item()
+      choice = torch.multinomial((counts + 1e-6).pow(1.0/max(1e-9,temperature)), 1).item() if temperature > 0 else torch.argmax(counts).item()
+    return self.tok.itos.get(legal_ids[choice], "<unk>")
+
+  def select_move_timed(self, env: HiveEnv, gamestring: str, budget_s: float, temperature: float = 1.0) -> str:
+    env.reset(gamestring)
+    prefix_ids = [self.tok.bos_id]
+    N: dict[int, int] = {}
+    W: dict[int, float] = {}
+    probs, _v_root, legal_ids = self._policy_value(env, prefix_ids)
+    if not legal_ids:
+      return "pass"
+    P = probs.clone()
+    if len(legal_ids) > 1 and self.conf.root_noise > 0:
+      noise = torch.distributions.Dirichlet(torch.full((len(P),), self.conf.dirichlet_alpha)).sample().to(P)
+      P = (1 - self.conf.root_noise) * P + self.conf.root_noise * noise
+    deadline = time.perf_counter() + max(0.0, budget_s) - 0.02
+    while time.perf_counter() < deadline:
+      best_a = None; best_score = -1e9
+      sumN = sum(N.get(i, 0) for i in range(len(legal_ids))) + 1
+      for aid in range(len(legal_ids)):
+        p = float(P[aid].item()); n = N.get(aid, 0)
+        q = W.get(aid, 0.0) / n if n > 0 else 0.0
+        u = self.conf.cpuct * p * math.sqrt(sumN) / (1 + n)
+        s = q + u
+        if s > best_score:
+          best_score, best_a = s, aid
+      assert best_a is not None
+      move_id = best_a
+      move_str = self.tok.itos.get(legal_ids[move_id], "<unk>")
+      env2 = HiveEnv(); env2.reset(gamestring); env2.play(move_str)
+      _, v2, _ = self._policy_value(env2, [self.tok.bos_id])
+      N[best_a] = N.get(best_a, 0) + 1
+      W[best_a] = W.get(best_a, 0.0) + v2
+    counts = torch.tensor([N.get(i, 0) for i in range(len(legal_ids))], dtype=torch.float32)
+    if counts.numel() == 0 or counts.sum() == 0:
+      choice = torch.multinomial(torch.softmax(P, dim=-1).pow(1.0/max(1e-9,temperature)), 1).item()
+    else:
+      choice = torch.multinomial((counts + 1e-6).pow(1.0/max(1e-9,temperature)), 1).item() if temperature > 0 else torch.argmax(counts).item()
     return self.tok.itos.get(legal_ids[choice], "<unk>")
 
 # ------------------------------ Training --------------------------------
@@ -529,27 +564,29 @@ def load_model(ckpt_path: str, device: str = "auto") -> tuple[PolicyValueTransfo
   return model, tok, dev
 
 class LMHiveAgent:
-  def __init__(self, model: PolicyValueTransformer, tok: MoveTokenizer, device: str, use_mcts: bool = True, mcts_n: int = 128, temperature: float = 1.0, resign_thresh: float = -0.9) -> None:
+  def __init__(self, model: PolicyValueTransformer, tok: MoveTokenizer, device: str, use_mcts: bool = True, mcts_n: int = 128, temperature: float = 1.0) -> None:
     self.model = model; self.tok = tok; self.device = device
     self.use_mcts = use_mcts; self.temperature = temperature
     self.mcts = MCTS(model, tok, MCTSConf(n=mcts_n), device) if use_mcts else None
-    self.resign_thresh = resign_thresh
   def select(self, env: HiveEnv, gamestring: str) -> str:
-    x = torch.tensor([[self.tok.bos_id]], dtype=torch.long, device=self.device)
-    with torch.no_grad():
-      _, v, _ = self.model(x)
-    if float(v[0,-1].item()) < self.resign_thresh:
-      return "pass"
     if self.use_mcts and self.mcts is not None:
       return self.mcts.select_move(env, gamestring, self.temperature)
     env.reset(gamestring)
-    legals = env.legal_moves(); legal_ids = [self.tok.stoi.get(m, self.tok.unk_id) for m in legals]
+    legals = env.legal_moves()
+    if not legals:
+      return "pass"
+    legal_ids = [self.tok.stoi.get(m, self.tok.unk_id) for m in legals]
     with torch.no_grad():
       logits, _, _ = self.model(torch.tensor([[self.tok.bos_id]], dtype=torch.long, device=self.device))
-      masked = mask_logits_with_legals(logits[:, -1, :], legal_ids)
-      probs = torch.softmax(masked / max(1e-4,self.temperature), dim=-1).squeeze(0)
+      logits_legal = logits[:, -1, legal_ids]
+      probs = torch.softmax(logits_legal / max(1e-4, self.temperature), dim=-1).squeeze(0)
       choice = torch.multinomial(probs, 1).item()
-      return self.tok.itos.get(legal_ids[choice], "<unk>")
+    return self.tok.itos.get(legal_ids[choice], "<unk>")
+
+  def select_with_time(self, env: HiveEnv, gamestring: str, budget_s: float) -> str:
+    if self.use_mcts and self.mcts is not None:
+      return self.mcts.select_move_timed(env, gamestring, budget_s, self.temperature)
+    return self.select(env, gamestring)
 
 class RandomAgent:
   def move(self, env: HiveEnv) -> str:
@@ -560,7 +597,7 @@ class NegamaxAgent:
     self.time = movetime_s
     self._brain = AlphaBetaPruner()
   def move(self, env: HiveEnv) -> str:
-    b = Board(str(env.b))
+    b = Board(str(env.b) or "Base+MLP")
     mv = self._brain.find_best_move(b, Engine.DEFAULT_MAX_BRANCHING_FACTOR, time_limit=self.time)
     return mv if mv in env.legal_moves() else random.choice(env.legal_moves())
 
@@ -581,7 +618,16 @@ def play_match(agent_w: Any, agent_b: Any, max_plies: int = 300) -> tuple[str, i
   for ply in range(max_plies):
     if env.is_over():
       break
-    move = agent_w.move(env) if ply % 2 == 0 else agent_b.move(env)
+    if ply % 2 == 0:
+      if isinstance(agent_w, LMHiveAgent):
+        move = agent_w.select(env, env.gamestring())
+      else:
+        move = agent_w.move(env)
+    else:
+      if isinstance(agent_b, LMHiveAgent):
+        move = agent_b.select(env, env.gamestring())
+      else:
+        move = agent_b.move(env)
     env.play(move)
     plies += 1
   res = env.result() or "D"
@@ -662,6 +708,7 @@ if __name__ == "__main__":
   pl.add_argument("--gamestring", type=str, default="")
   pl.add_argument("--mcts-n", type=int, default=128)
   pl.add_argument("--temperature", type=float, default=1.0)
+  pl.add_argument("--time", type=str, default="", help="hh:mm:ss time budget")
 
   ev = sub.add_parser("eval", help="evaluate vs random or negamax")
   ev.add_argument("--ckpt", required=True)
@@ -709,7 +756,16 @@ if __name__ == "__main__":
     model, tok, dev = load_model(ns.ckpt)
     env = HiveEnv()
     agent = LMHiveAgent(model, tok, dev, use_mcts=(ns.mcts_n>0), mcts_n=ns.mcts_n, temperature=ns.temperature)
-    mv = agent.select(env, ns.gamestring)
+    def _parse_hhmmss(s: str) -> float:
+      if not s:
+        return 0.0
+      hh, mm, ss = s.split(":")
+      return int(hh)*3600 + int(mm)*60 + float(ss)
+    budget = _parse_hhmmss(getattr(ns, "time", ""))
+    if budget >= 5.0:
+      mv = agent.select_with_time(env, ns.gamestring, budget)
+    else:
+      mv = agent.select(env, ns.gamestring)
     print(mv)
   elif ns.cmd == "eval":
     r = eval_model(ns.ckpt, vs=ns.vs, conf=EvalConf(games=ns.games, mcts_n=ns.mcts_n, temperature=ns.temperature, negamax_time=ns.negamax_time))
