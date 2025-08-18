@@ -3,3 +3,4 @@ sphinx
 prospector
 pytest
 scalene
+tqdm

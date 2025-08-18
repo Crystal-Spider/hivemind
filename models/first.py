@@ -22,6 +22,7 @@ import os
 import random
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -446,7 +447,7 @@ def train_main(argv: Optional[Iterable[str]] = None) -> int:
     accum = 0
     opt.zero_grad(set_to_none=True)
     tr_lm = tr_v = tr_t = 0.0; seen = 0
-    for batch in train_ld:
+    for batch in tqdm(train_ld, desc=f"train e{ep}/{args.epochs}", ncols=100):
       x = batch.x.to(device); y = batch.y_next.to(device)
       v_tgt = batch.v_tgt.to(device); m = batch.mask.to(device)
       t_tgt = batch.t_tgt.to(device) if (batch.t_tgt is not None) else None
@@ -474,7 +475,7 @@ def train_main(argv: Optional[Iterable[str]] = None) -> int:
     model.train(False)
     va_lm = va_v = va_t = 0.0; vseen = 0
     with torch.no_grad():
-      for batch in val_ld:
+      for batch in tqdm(val_ld, desc=f"valid e{ep}/{args.epochs}", ncols=100, leave=False):
         x = batch.x.to(device); y = batch.y_next.to(device)
         v_tgt = batch.v_tgt.to(device); m = batch.mask.to(device)
         t_tgt = batch.t_tgt.to(device) if (batch.t_tgt is not None) else None
@@ -588,7 +589,7 @@ def eval_model(ckpt: str, vs: str = "random", conf: EvalConf = EvalConf()) -> Ev
     opp = NegamaxAgent(conf.negamax_time)
   W = L = D = 0
   total_len=0
-  for g in range(conf.games):
+  for g in tqdm(range(conf.games), desc="eval", ncols=100):
     aw, ab = (lm_agent, opp) if g % 2==0 else (opp, lm_agent)
     res, length = play_match(aw, ab)
     if res == "W":
@@ -626,7 +627,7 @@ def upscale_main(argv: Optional[Iterable[str]] = None) -> int:
   # write JSONL(.gz)
   out = a.out; os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
   fh: io.TextIOBase = io.TextIOWrapper(gzip.open(out, "wb"), encoding="utf-8") if out.endswith(".gz") else open(out, "w", encoding="utf-8")
-  for _g in range(a.games):
+  for _g in tqdm(range(a.games), desc="upscale", ncols=100):
     env.reset("")
     moves: list[str] = []
     for _ply in range(300):
@@ -678,17 +679,49 @@ if __name__ == "__main__":
   up.add_argument("--mcts-n", type=int, default=64)
   up.add_argument("--temperature", type=float, default=1.0)
 
-  args, rest = ap.parse_known_args()
-  if args.cmd == "train":
-    raise SystemExit(train_main(rest))
-  elif args.cmd == "play":
-    model, tok, dev = load_model(args.ckpt)
+  ns = ap.parse_args()
+
+  if ns.cmd == "train":
+    train_argv: list[str] = [
+      "--data", *ns.data,
+      "--out-dir", ns.out_dir,
+      "--ctx", str(ns.ctx),
+      "--d", str(ns.d),
+      "--L", str(ns.L),
+      "--heads", str(ns.heads),
+      "--mlp", str(ns.mlp),
+      "--batch-size", str(ns.batch_size),
+      "--lr", str(ns.lr),
+      "--wd", str(ns.wd),
+      "--epochs", str(ns.epochs),
+      "--lambda-value", str(ns.lambda_value),
+      "--lambda-think", str(ns.lambda_think),
+      "--seed", str(ns.seed),
+      "--min-count", str(ns.min_count),
+      "--vocab", ns.vocab,
+      "--device", ns.device,
+      "--warmup-steps", str(ns.warmup_steps),
+      "--grad-accum", str(ns.grad_accum),
+      "--topk", str(ns.topk),
+    ]
+    raise SystemExit(train_main(train_argv))
+
+  elif ns.cmd == "play":
+    model, tok, dev = load_model(ns.ckpt)
     env = HiveEnv()
-    agent = LMHiveAgent(model, tok, dev, use_mcts=(args.mcts_n>0), mcts_n=args.mcts_n, temperature=args.temperature)
-    mv = agent.select(env, args.gamestring)
+    agent = LMHiveAgent(model, tok, dev, use_mcts=(ns.mcts_n > 0), mcts_n=ns.mcts_n, temperature=ns.temperature)
+    mv = agent.select(env, ns.gamestring)
     print(mv)
-  elif args.cmd == "eval":
-    r = eval_model(args.ckpt, vs=args.vs, conf=EvalConf(games=args.games, mcts_n=args.mcts_n, temperature=args.temperature, negamax_time=args.negamax_time))
+
+  elif ns.cmd == "eval":
+    r = eval_model(ns.ckpt, vs=ns.vs,
+                   conf=EvalConf(games=ns.games, mcts_n=ns.mcts_n,
+                                 temperature=ns.temperature, negamax_time=ns.negamax_time))
     print(json.dumps(dc.asdict(r)))
-  elif args.cmd == "upscale":
-    raise SystemExit(upscale_main(rest))
+
+  elif ns.cmd == "upscale":
+    raise SystemExit(upscale_main([
+      "--ckpt", ns.ckpt, "--out", ns.out,
+      "--games", str(ns.games), "--mcts-n", str(ns.mcts_n),
+      "--temperature", str(ns.temperature),
+    ]))
