@@ -12,6 +12,7 @@ from typing import Iterable, Optional, Tuple, List, Dict, Any
 from dataclasses import dataclass
 import os
 from concurrent.futures import ProcessPoolExecutor
+from tqdm import tqdm
 
 ROOT: Path = Path(__file__).resolve().parents[1]
 src_path = str(ROOT / "src")
@@ -132,6 +133,7 @@ def _map_result(state: GameState) -> Optional[str]:
     return "B"
   return None
 
+
 def _sanity_ok(rec: Dict[str, Any]) -> bool:
   # basic schema checks
   mv = rec.get("moves")
@@ -157,6 +159,21 @@ def _sanity_ok(rec: Dict[str, Any]) -> bool:
     return True
   except Exception:
     return False
+
+
+def _progress(iterable, total=None):
+    """Wrap an iterator with a progress bar if available."""
+    return tqdm(iterable, total=total, unit="line", smoothing=0.1, mininterval=0.25, leave=False) # type: ignore
+
+
+def _count_nonempty_lines(p: Path) -> int:
+    """Optional: pre-count for % and ETA."""
+    n = 0
+    with _open_reader(p) as _rd:
+        for _line in _rd:
+            if _line.strip():
+                n += 1
+    return n
 
 
 # -------------------------- Filtering core -----------------------------
@@ -258,6 +275,7 @@ def filter_dataset(a: Args) -> int:
 
   total_in = 0
   kept_candidates = 0
+  total_lines = _count_nonempty_lines(inp)
 
   def _jobs(reader: io.TextIOBase):
     for seq, line in enumerate(reader, start=1):
@@ -266,7 +284,7 @@ def filter_dataset(a: Args) -> int:
       yield (seq, line, a.variant, a.min_plies, a.max_plies_ref)
 
   with _open_reader(inp) as rd, ProcessPoolExecutor(max_workers=a.workers) as ex:
-    for out in ex.map(_process_line_job, _jobs(rd), chunksize=a.chunksize):
+    for out in _progress(ex.map(_process_line_job, _jobs(rd), chunksize=a.chunksize), total_lines):
       if out is None:
         continue
       total_in += 1
