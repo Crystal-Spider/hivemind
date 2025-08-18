@@ -9,6 +9,9 @@ import heapq
 import hashlib
 from pathlib import Path
 from typing import Iterable, Optional, Tuple, List, Dict, Any
+from dataclasses import dataclass
+import os
+from concurrent.futures import ProcessPoolExecutor
 
 ROOT: Path = Path(__file__).resolve().parents[1]
 src_path = str(ROOT / "src")
@@ -38,6 +41,7 @@ Usage:
 """
 
 # ------------------------------ CLI -----------------------------------
+@dataclass
 class Args(argparse.Namespace):
   inp: str
   out: str
@@ -48,6 +52,8 @@ class Args(argparse.Namespace):
   dedup: bool
   seed: int
   max_plies_ref: int
+  workers: int
+  chunksize: int
 
 
 def parse_args(argv: Optional[Iterable[str]] = None) -> Args:
@@ -62,6 +68,8 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> Args:
   p.add_argument("--no-dedup", dest="no_dedup", action="store_true", help="disable dedup of move transcripts")
   p.add_argument("--seed", type=int, default=0, help="tie-breaker seed for stable ordering")
   p.add_argument("--max-plies-ref", type=int, default=300, help="reference max plies for length scoring")
+  p.add_argument("--workers", type=int, default=(os.cpu_count() or 1), help="number of parallel worker processes")
+  p.add_argument("--chunksize", type=int, default=64, help="batch size per worker for map()")
   a = p.parse_args(list(argv) if argv is not None else None)
   # normalize dedup flags
   dedup = True
@@ -69,7 +77,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> Args:
     dedup = False
   elif a.dedup:
     dedup = True
-  return Args(a.inp, a.out, a.target, a.variant, a.preserve_mix, a.min_plies, dedup, a.seed, a.max_plies_ref)
+  return Args(a.inp, a.out, a.target, a.variant, a.preserve_mix, a.min_plies, dedup, a.seed, a.max_plies_ref, workers=a.workers, chunksize=a.chunksize)
 
 
 # ----------------------------- I/O utils -------------------------------
@@ -133,12 +141,12 @@ def _sanity_ok(rec: Dict[str, Any]) -> bool:
     return False
   # replay on a fresh Board
   try:
-    b = Board()
+    b = Board("Base+MLP")
     for m in mv:
-      legal = b.valid_moves.split(";")
-      if m not in legal:
+      try:
+        b.play(m)
+      except Exception:
         return False
-      b.play(m)
     # canonical gamestring must match
     if rec.get("game_string") != str(b):
       return False
@@ -187,6 +195,43 @@ def _variant_ok(gs: str, token: Optional[str]) -> bool:
   return token == head or token in head
 
 
+def _process_line_job(args: Tuple[int, str, Optional[str], int, int]) -> Optional[Tuple[int, str, str, str, float]]:
+  seq, line, variant_token, min_plies, max_ref = args
+  line_stripped = line.strip()
+  if not line_stripped:
+    return None
+  try:
+    rec = json.loads(line_stripped)
+  except Exception:
+    return None
+  gs = rec.get("game_string")
+  if not isinstance(gs, str) or not _variant_ok(gs, variant_token):
+    return None
+  ply = int(rec.get("ply_count", 0) or 0)
+  if ply < min_plies:
+    return None
+  mv = rec.get("moves")
+  if not isinstance(mv, list):
+    return None
+
+  # exact-moves transcript key (for global dedup in the reducer)
+  key = hashlib.sha1((" ".join(map(str, mv))).encode("utf-8")).hexdigest()
+
+  # sanity check
+  if not _sanity_ok(rec):
+    return None
+
+  meta = rec.get("meta") if isinstance(rec.get("meta"), dict) else {}
+  group = meta.get("group") if isinstance(meta, dict) else None
+  if group not in ("R", "NR", "NN"):
+    group = "R"
+  base = GroupWeights.get(group, 1.0)
+  res = rec.get("result") if isinstance(rec.get("result"), str) else None
+  score = base + _result_bonus(res) + _len_bonus(ply, max_ref) + _short_penalty(ply)
+
+  return (seq, (line_stripped if line_stripped.endswith("\n") else line_stripped + "\n"), key, group, score)
+
+
 def filter_dataset(a: Args) -> int:
   inp = Path(a.inp).resolve()
   outp = Path(a.out).resolve()
@@ -210,65 +255,35 @@ def filter_dataset(a: Args) -> int:
 
   # dedup set
   seen: set[str] = set()
-  tiebreak = 0
 
   total_in = 0
   kept_candidates = 0
 
-  with _open_reader(inp) as rd:
-    for line in rd:
+  def _jobs(reader: io.TextIOBase):
+    for seq, line in enumerate(reader, start=1):
       if not line.strip():
         continue
+      yield (seq, line, a.variant, a.min_plies, a.max_plies_ref)
+
+  with _open_reader(inp) as rd, ProcessPoolExecutor(max_workers=a.workers) as ex:
+    for out in ex.map(_process_line_job, _jobs(rd), chunksize=a.chunksize):
+      if out is None:
+        continue
       total_in += 1
-      try:
-        rec = json.loads(line)
-      except Exception:
-        continue
-
-      # variant filter
-      gs = rec.get("game_string")
-      if not isinstance(gs, str) or not _variant_ok(gs, a.variant):
-        continue
-
-      # length filter
-      ply = int(rec.get("ply_count", 0) or 0)
-      if ply < a.min_plies:
-        continue
-
-      # dedup by moves transcript (exact)
+      seq, line_norm, key, group, score = out
       if a.dedup:
-        mv = rec.get("moves")
-        if not isinstance(mv, list):
-          continue
-        key = hashlib.sha1((" ".join(map(str, mv))).encode("utf-8")).hexdigest()
         if key in seen:
           continue
         seen.add(key)
-
-      # sanity check of the game by replaying moves on a fresh Board
-      if not _sanity_ok(rec):
-        continue
-
-      # score
-      meta = rec.get("meta") if isinstance(rec.get("meta"), dict) else {}
-      group = meta.get("group") if isinstance(meta, dict) else None
-      if group not in ("R", "NR", "NN"):
-        group = "R"
-      base = GroupWeights.get(group, 1.0)
-      res = rec.get("result") if isinstance(rec.get("result"), str) else None
-      score = base + _result_bonus(res) + _len_bonus(ply, a.max_plies_ref) + _short_penalty(ply)
-
-      # stable tie-breaker
-      tiebreak += 1
-      # push to reservoirs
+      tiebreak = seq  # stable tie-breaker by input order
       if a.preserve_mix:
         if group == "R":
-          R.push(score, tiebreak, line)
+          R.push(score, tiebreak, line_norm)
         elif group == "NR":
-          NR.push(score, tiebreak, line)
+          NR.push(score, tiebreak, line_norm)
         else:
-          NN.push(score, tiebreak, line)
-      G.push(score, tiebreak, line)
+          NN.push(score, tiebreak, line_norm)
+      G.push(score, tiebreak, line_norm)
       kept_candidates += 1
 
   # assemble selection

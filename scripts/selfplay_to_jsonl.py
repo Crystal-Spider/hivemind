@@ -105,10 +105,10 @@ class _Validator:
 
     b = Board("Base+MLP")
     for i, mv in enumerate(rec["moves"]):
-      legal = b.valid_moves.split(";")
-      if mv not in legal:
+      try:
+        b.play(mv)
+      except Exception:
         return False, f"illegal move at ply {i}: {mv}"
-      b.play(mv)
 
     gs = str(b)
     if rec.get("game_string") != gs:

@@ -42,8 +42,8 @@ src_path = str(ROOT / "src")
 if src_path not in sys.path:
   sys.path.insert(0, src_path)
 
-from core.board import Board  # type: ignore
-from core.enums import GameState  # type: ignore
+from core.board import Board
+from core.enums import GameState
 
 
 # --------------------------- Helpers ---------------------------
@@ -53,30 +53,31 @@ def _split_uhp_gamestring(gs: str) -> list[str]:
   Keeps backslashes in tokens. Trims whitespace; drops empties.
   Example: "a\\;b;c" → ["a\\;b", "c"].
   """
-  parts: list[str] = []
-  cur: list[str] = []
-  esc = False
-  for ch in gs:
-    if esc:
-      # keep escaped char verbatim
-      cur.append(ch)
-      esc = False
-      continue
-    if ch == "\\":
-      cur.append(ch)
-      esc = True
-      continue
-    if ch == ";":
-      token = "".join(cur).strip()
-      if token:
-        parts.append(token)
-      cur = []
-      continue
-    cur.append(ch)
-  token = "".join(cur).strip()
-  if token:
-    parts.append(token)
-  return parts
+  return [t.strip() for t in gs.split(';') if t.strip()]
+  # parts: list[str] = []
+  # cur: list[str] = []
+  # esc = False
+  # for ch in gs:
+  #   if esc:
+  #     # keep escaped char verbatim
+  #     cur.append(ch)
+  #     esc = False
+  #     continue
+  #   if ch == "\\":
+  #     cur.append(ch)
+  #     esc = True
+  #     continue
+  #   if ch == ";":
+  #     token = "".join(cur).strip()
+  #     if token:
+  #       parts.append(token)
+  #     cur = []
+  #     continue
+  #   cur.append(ch)
+  # token = "".join(cur).strip()
+  # if token:
+  #   parts.append(token)
+  # return parts
 
 
 def _map_result(state: GameState) -> Optional[str]:
@@ -178,7 +179,7 @@ def convert_csv(inp: Path, out_path: Path, err_path: Path, col_gs: int, col_file
       total += 1
       try:
         # Build moves by playing segments that are actual moves.
-        b = Board()
+        b = Board("Base+MLP")
         moves: List[str] = []
         for seg in _split_uhp_gamestring(s):
           try:
