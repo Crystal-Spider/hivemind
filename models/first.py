@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """
-Day 3-7 stack for Hive LM:
-- Day 3: decoder-only Transformer (policy + value), ctx=256, d=512, L=8, heads=8, mlp=2048.
-- Day 4: training loop with AdamW(β=(0.9,0.95), wd=0.1), cosine LR + warmup, AMP, grad-accum.
-- Day 5: legality mask from engine and shallow PUCT MCTS (N rollouts).
-- Day 6: play/eval vs random and negamax heuristic; ablations and metrics.
-- Day 7: resignation token, UHP I/O, top-k checkpoints, temperature sweep.
-- Extras: think-time head (optional), guided data upscaling via masked sampling/MCTS.
+Optimized Day 3–7 stack for Hive LM
+- Faster dataset (preload JSONL into memory; no per-sample gzip scans)
+- Bucketed batching by length to reduce padding
+- DataLoader tuned: workers, pinned memory, persistent workers, prefetch
+- Explicit CUDA use + AMP; optional torch.compile
+- TQDM progress bars for train/val/eval/upscale
 
-Inputs: JSONL(.gz) with {moves:[str], result:"W"|"B"|"D"|null, optional think_sec:[float] per ply}.
-Tokens are move strings seen in data + specials.
+Model: decoder-only Transformer with policy + value (+ optional think-time)
 """
 from __future__ import annotations
 import argparse
@@ -22,11 +20,11 @@ import os
 import random
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
-from tqdm import tqdm
 
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
+from tqdm import tqdm
 
 # ------------------------- Engine bridge (UHP) ---------------------------
 ROOT = Path(__file__).resolve().parents[1]
@@ -96,56 +94,51 @@ class Ex:
   think_targets: Optional[list[float]]
 
 class HiveJsonlDataset(Dataset[Ex]):
+  """Preloads all records into memory for fast random access.
+  If memory is tight, first decompress .gz to .jsonl and switch to offset-based IO.
+  """
   def __init__(self, paths: list[str], tok: MoveTokenizer, ctx: int, split_frac: float = 0.95, train: bool = True) -> None:
-    self.paths = paths
-    self.tok = tok
-    self.ctx = ctx
-    # index lines
-    self._idx: list[tuple[int, int]] = []
+    self.tok, self.ctx = tok, ctx
+    recs: list[dict[str, Any]] = []
+    def _open(p: str) -> io.TextIOBase:
+      return io.TextIOWrapper(gzip.open(p, "rb"), encoding="utf-8") if p.endswith(".gz") else open(p, "r", encoding="utf-8")
+    for p in paths:
+      with _open(p) as fh:
+        for line in fh:
+          if not line.strip():
+            continue
+          try:
+            recs.append(json.loads(line))
+          except Exception:
+            continue
     rng = random.Random(123)
-    for i, p in enumerate(paths):
-      opener = gzip.open if p.endswith(".gz") else open
-      mode = "rt" if p.endswith(".gz") else "r"
-      with opener(p, mode, encoding="utf-8") as fh:
-        for ln, line in enumerate(fh):
-          if line.strip():
-            self._idx.append((i, ln))
-    rng.shuffle(self._idx)
-    cut = int(len(self._idx) * split_frac)
-    self.indices = self._idx[:cut] if train else self._idx[cut:]
+    rng.shuffle(recs)
+    cut = int(len(recs) * split_frac)
+    self._data = recs[:cut] if train else recs[cut:]
 
   def __len__(self) -> int:
-    return len(self.indices)
+    return len(self._data)
 
   def __getitem__(self, idx: int) -> Ex:
-    path_idx, line_no = self.indices[idx]
-    path = self.paths[path_idx]
-    opener = gzip.open if path.endswith(".gz") else open
-    mode = "rt" if path.endswith(".gz") else "r"
-    rec: Any = {}
-    with opener(path, mode, encoding="utf-8") as fh:
-      for ln, line in enumerate(fh):
-        if ln == line_no:
-          rec = json.loads(line)
-          break
+    rec = self._data[idx]
     moves: list[str] = rec.get("moves", [])
     res = rec.get("result")
     r = 1.0 if res == "W" else (-1.0 if res == "B" else 0.0)
     ids = self.tok.encode_moves(moves, add_bos=True, add_eos=True)
-    targets: list[float] = []
-    for t in range(len(ids)):
-      side = 1.0 if (t % 2 == 0) else -1.0
-      targets.append(r * side if res is not None else 0.0)
+    T = min(self.ctx, len(ids))
+    ids = ids[:T]
+    targets = [ (r if (t % 2 == 0) else -r) if res is not None else 0.0 for t in range(T) ]
     think = rec.get("think_sec")
-    think_targets = None
-    if isinstance(think, list):
-      think_targets = [float(x) for x in think[:len(ids)]] # type: ignore
-    if len(ids) > self.ctx:
-      ids = ids[: self.ctx]
-      targets = targets[: self.ctx]
-      if think_targets is not None:
-        think_targets = think_targets[: self.ctx]
+    think_targets = [float(x) for x in think[:T]] if isinstance(think, list) else None
     return Ex(ids=ids, value_targets=targets, think_targets=think_targets)
+
+  def lengths(self) -> list[int]:
+    """Approximate token lengths for bucketing: len(moves)+2 (BOS+EOS), capped by ctx."""
+    L: list[int] = []
+    for rec in self._data:
+      n = len(rec.get("moves", [])) + 2
+      L.append(n)
+    return L
 
 # ------------------------------ Collate ---------------------------------
 @dc.dataclass(slots=True)
@@ -170,25 +163,24 @@ def collate(exs: list[Ex], pad_id: int, ctx: int) -> Batch:
   for i, e in enumerate(exs):
     n = min(T, len(e.ids))
     x[i, :n] = torch.tensor(e.ids[:n])
-    y_seq = e.ids[1:n] + [pad_id] if n > 0 else []
-    y[i, :n] = torch.tensor(y_seq + [-100] * (n - len(y_seq)))
+    if n > 0:
+      y_seq = e.ids[1:n] + [pad_id]
+      y[i, :n] = torch.tensor(y_seq)
     v[i, :n] = torch.tensor(e.value_targets[:n])
-    if have_t and t is not None:
-      if e.think_targets is not None:
-        t[i, :n] = torch.tensor(e.think_targets[:n])
+    if have_t and t is not None and e.think_targets is not None:
+      t[i, :n] = torch.tensor(e.think_targets[:n])
     m[i, :n] = True
   return Batch(x=x, mask=m, y_next=y, v_tgt=v, t_tgt=t)
 
 # ------------------------------- Model ----------------------------------
 class TransformerBlock(nn.Module):
   def __init__(self, d: int, heads: int, mlp: int, attn_drop: float, resid_drop: float) -> None:
-    super().__init__() # type: ignore
+    super().__init__()  # type: ignore
     self.ln1 = nn.LayerNorm(d)
     self.attn = nn.MultiheadAttention(d, heads, dropout=attn_drop, batch_first=True)
     self.ln2 = nn.LayerNorm(d)
     self.mlp = nn.Sequential(nn.Linear(d, mlp), nn.GELU(), nn.Linear(mlp, d))
     self.drop = nn.Dropout(resid_drop)
-
   def forward(self, x: torch.Tensor, attn_mask: torch.Tensor) -> torch.Tensor:
     h = self.ln1(x)
     a, _ = self.attn(h, h, h, attn_mask=attn_mask, need_weights=False)
@@ -199,7 +191,7 @@ class TransformerBlock(nn.Module):
 
 class PolicyValueTransformer(nn.Module):
   def __init__(self, vocab_size: int, ctx: int = 256, d: int = 512, L: int = 8, heads: int = 8, mlp: int = 2048, attn_drop: float = 0.0, resid_drop: float = 0.0, think_head: bool = True) -> None:
-    super().__init__() # type: ignore
+    super().__init__()  # type: ignore
     self.ctx = ctx
     self.tok_emb = nn.Embedding(vocab_size, d)
     self.pos_emb = nn.Embedding(ctx, d)
@@ -208,7 +200,6 @@ class PolicyValueTransformer(nn.Module):
     self.head_policy = nn.Linear(d, vocab_size, bias=False)
     self.head_value = nn.Linear(d, 1)
     self.head_think = nn.Linear(d, 1) if think_head else None
-
   def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     T = x.size(1)
     pos = torch.arange(T, device=x.device).unsqueeze(0)
@@ -221,7 +212,7 @@ class PolicyValueTransformer(nn.Module):
     v = torch.tanh(self.head_value(h)).squeeze(-1)
     t = None
     if self.head_think is not None:
-      t = torch.nn.functional.softplus(self.head_think(h)).squeeze(-1)  # seconds ≥ 0
+      t = torch.nn.functional.softplus(self.head_think(h)).squeeze(-1)
     return logits, v, t
 
 # --------------------------- Legality mask -------------------------------
@@ -271,7 +262,6 @@ class MCTS:
     self.tok = tok
     self.conf = conf
     self.device = device
-
   def _policy_value(self, env: HiveEnv, prefix_ids: list[int]) -> tuple[torch.Tensor, float, list[int]]:
     x = torch.tensor(prefix_ids, dtype=torch.long, device=self.device).unsqueeze(0)
     with torch.no_grad():
@@ -281,53 +271,37 @@ class MCTS:
     masked = mask_logits_with_legals(logits[:, -1, :], legal_ids)
     probs = torch.softmax(masked, dim=-1).squeeze(0)
     return probs, float(v[0, -1].item()), legal_ids
-
   def select_move(self, env: HiveEnv, gamestring: str, temperature: float = 1.0) -> str:
-    # simple PUCT with in-memory tree per root
     env.reset(gamestring)
     prefix_ids = [self.tok.bos_id]
-    # Node stats keyed by move-id
     N: dict[int, int] = {}
     W: dict[int, float] = {}
-    P: Optional[torch.Tensor]
     probs, _v_root, legal_ids = self._policy_value(env, prefix_ids)
     P = probs.clone()
-    # add Dirichlet noise at root
     if len(legal_ids) > 1 and self.conf.root_noise > 0:
       noise = torch.distributions.Dirichlet(torch.full((len(P),), self.conf.dirichlet_alpha)).sample().to(P)
       P = (1 - self.conf.root_noise) * P + self.conf.root_noise * noise
-
-    # Rollouts
     for _ in range(self.conf.n):
-      # select best a maximizing Q + U
-      best_a = None
-      best_score = -1e9
+      best_a = None; best_score = -1e9
       sumN = sum(N.get(i, 0) for i in range(len(P))) + 1
       for aid in range(len(P)):
-        p = float(P[aid].item())
-        n = N.get(aid, 0)
+        p = float(P[aid].item()); n = N.get(aid, 0)
         q = W.get(aid, 0.0) / n if n > 0 else 0.0
         u = self.conf.cpuct * p * math.sqrt(sumN) / (1 + n)
         s = q + u
         if s > best_score:
           best_score, best_a = s, aid
       assert best_a is not None
-      # simulate 1-ply: apply chosen move and eval leaf
       move_id = best_a
       move_str = self.tok.itos.get(legal_ids[move_id], "<unk>")
       env2 = HiveEnv(); env2.reset(gamestring)
       env2.play(move_str)
-      # leaf eval
       ids2 = [self.tok.bos_id]
-      _, v2, _ = self._policy_value(env2, ids2)
-      # backup
+      _p2, v2, _ = self._policy_value(env2, ids2)
       N[best_a] = N.get(best_a, 0) + 1
       W[best_a] = W.get(best_a, 0.0) + v2
-
-    # pick move
     counts = torch.tensor([N.get(i, 0) for i in range(len(P))], dtype=torch.float32)
-    if len(counts) == 0 or counts.sum() == 0:
-      # fallback to policy
+    if counts.numel() == 0 or counts.sum() == 0:
       probs = torch.softmax(P, dim=-1)
       choice = torch.multinomial(probs.pow(1.0/temperature), 1).item()
     else:
@@ -335,8 +309,7 @@ class MCTS:
         choice = torch.multinomial((counts + 1e-6).pow(1.0/temperature), 1).item()
       else:
         choice = torch.argmax(counts).item()
-    chosen_move = self.tok.itos.get(legal_ids[choice], "<unk>") # type: ignore
-    return chosen_move
+    return self.tok.itos.get(legal_ids[choice], "<unk>")
 
 # ------------------------------ Training --------------------------------
 @dc.dataclass(slots=True)
@@ -361,10 +334,12 @@ class TrainArgs:
   warmup_steps: int
   grad_accum: int
   topk: int
+  num_workers: int
+  compile: int
 
 
 def parse_train_args(argv: Optional[Iterable[str]] = None) -> TrainArgs:
-  p = argparse.ArgumentParser(description="Day 3–7 training")
+  p = argparse.ArgumentParser(description="Day 3–7 training (optimized)")
   p.add_argument("--data", nargs="+", type=str, required=True)
   p.add_argument("--out-dir", type=str, default="runs/day3")
   p.add_argument("--ctx", type=int, default=256)
@@ -385,6 +360,8 @@ def parse_train_args(argv: Optional[Iterable[str]] = None) -> TrainArgs:
   p.add_argument("--warmup-steps", type=int, default=500)
   p.add_argument("--grad-accum", type=int, default=1)
   p.add_argument("--topk", type=int, default=3)
+  p.add_argument("--num-workers", type=int, default=max(2, (os.cpu_count() or 8)//2))
+  p.add_argument("--compile", type=int, default=0, help="1 to torch.compile the model")
   a = p.parse_args(list(argv) if argv is not None else None)
   return TrainArgs(
     data=a.data, out_dir=a.out_dir, ctx=a.ctx, d=a.d, L=a.L, heads=a.heads, mlp=a.mlp,
@@ -392,6 +369,7 @@ def parse_train_args(argv: Optional[Iterable[str]] = None) -> TrainArgs:
     lambda_value=a.lambda_value, lambda_think=a.lambda_think, seed=a.seed,
     min_count=a.min_count, vocab=(a.vocab or None), device=a.device,
     warmup_steps=a.warmup_steps, grad_accum=a.grad_accum, topk=a.topk,
+    num_workers=a.num_workers, compile=a.compile,
   )
 
 
@@ -399,11 +377,38 @@ def count_params(m: nn.Module) -> int:
   return sum(p.numel() for p in m.parameters())
 
 
+class Collater:
+  def __init__(self, pad_id: int, ctx: int) -> None:
+    self.pad_id = pad_id
+    self.ctx = ctx
+  def __call__(self, b: list[Ex]) -> Batch:
+    return collate(b, self.pad_id, self.ctx)
+
+def _make_loader(ds: HiveJsonlDataset, batch: int, pad_id: int, ctx: int, device: str, num_workers: int, bucket: int = 4096, shuffle_seed: int = 123) -> DataLoader:
+  coll = Collater(pad_id, ctx)
+  lengths = ds.lengths()
+  order = sorted(range(len(lengths)), key=lambda i: lengths[i])
+  rng = random.Random(shuffle_seed)
+  batches: list[int] = []
+  for s in range(0, len(order), bucket):
+    block = order[s:s+bucket]
+    rng.shuffle(block)
+    batches.extend(block)
+  sampler = SubsetRandomSampler(batches)
+  return DataLoader(
+    ds, batch_size=batch, sampler=sampler, collate_fn=coll,
+    num_workers=num_workers, pin_memory=(device=="cuda"), persistent_workers=(num_workers>0), prefetch_factor=2,
+  )
+
+
 def train_main(argv: Optional[Iterable[str]] = None) -> int:
   args = parse_train_args(argv)
   os.makedirs(args.out_dir, exist_ok=True)
-  torch.manual_seed(args.seed) # type: ignore
+  torch.manual_seed(args.seed)  # type: ignore
   random.seed(args.seed)
+  if hasattr(torch, "set_float32_matmul_precision"):
+    torch.set_float32_matmul_precision("high")
+  torch.backends.cudnn.benchmark = True  # type: ignore
 
   # tokenizer
   if args.vocab and os.path.exists(args.vocab):
@@ -418,14 +423,16 @@ def train_main(argv: Optional[Iterable[str]] = None) -> int:
   # data
   train_ds = HiveJsonlDataset(args.data, tok, ctx=args.ctx, train=True)
   val_ds = HiveJsonlDataset(args.data, tok, ctx=args.ctx, train=False)
-  coll = lambda b: collate(b, tok.pad_id, args.ctx)
-  train_ld = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, collate_fn=coll, num_workers=2)
-  val_ld = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, collate_fn=coll, num_workers=2)
+  device = ("cuda" if torch.cuda.is_available() else "cpu") if args.device == "auto" else args.device
+  train_ld = _make_loader(train_ds, args.batch_size, tok.pad_id, args.ctx, device, args.num_workers)
+  val_ld = _make_loader(val_ds, args.batch_size, tok.pad_id, args.ctx, device, max(1, args.num_workers//2))
 
   # model
-  device = ("cuda" if torch.cuda.is_available() else "cpu") if args.device == "auto" else args.device
   model = PolicyValueTransformer(vocab_size=len(tok.stoi), ctx=args.ctx, d=args.d, L=args.L, heads=args.heads, mlp=args.mlp, think_head=(args.lambda_think > 0))
+  if args.compile and hasattr(torch, "compile"):
+    model = torch.compile(model)  # type: ignore
   model.to(device)
+  print(f"device={device}")
   print(f"params={count_params(model)/1e6:.1f}M, vocab={len(tok.stoi)}")
 
   # opt + sched
@@ -436,7 +443,7 @@ def train_main(argv: Optional[Iterable[str]] = None) -> int:
       return args.lr * step / max(1, args.warmup_steps)
     t = (step - args.warmup_steps) / max(1, total_steps - args.warmup_steps)
     return 0.5 * args.lr * (1 + math.cos(math.pi * t))
-  scaler = torch.amp.GradScaler('cuda', enabled=(device == "cuda")) # type: ignore
+  scaler = torch.amp.GradScaler('cuda', enabled=(device == "cuda"))  # type: ignore
   ce = nn.CrossEntropyLoss(ignore_index=-100)
   mse = nn.MSELoss(reduction="none")
 
@@ -448,12 +455,12 @@ def train_main(argv: Optional[Iterable[str]] = None) -> int:
     opt.zero_grad(set_to_none=True)
     tr_lm = tr_v = tr_t = 0.0; seen = 0
     for batch in tqdm(train_ld, desc=f"train e{ep}/{args.epochs}", ncols=100):
-      x = batch.x.to(device); y = batch.y_next.to(device)
-      v_tgt = batch.v_tgt.to(device); m = batch.mask.to(device)
-      t_tgt = batch.t_tgt.to(device) if (batch.t_tgt is not None) else None
+      x = batch.x.to(device, non_blocking=True); y = batch.y_next.to(device, non_blocking=True)
+      v_tgt = batch.v_tgt.to(device, non_blocking=True); m = batch.mask.to(device, non_blocking=True)
+      t_tgt = batch.t_tgt.to(device, non_blocking=True) if (batch.t_tgt is not None) else None
       for g in opt.param_groups:
         g["lr"] = lr_at(step)
-      with torch.amp.autocast('cuda', enabled=(device == "cuda")): # type: ignore
+      with torch.amp.autocast('cuda', enabled=(device == "cuda")):
         logits, v, t = model(x)
         lm = ce(logits.view(-1, logits.size(-1)), y.view(-1))
         v_loss_full = mse(v, v_tgt)
@@ -464,21 +471,22 @@ def train_main(argv: Optional[Iterable[str]] = None) -> int:
         else:
           t_loss = torch.tensor(0.0, device=device)
         loss = lm + args.lambda_value * v_loss + args.lambda_think * t_loss
-      scaler.scale(loss / args.grad_accum).backward() # type: ignore
+      scaler.scale(loss / args.grad_accum).backward()  # type: ignore
       accum += 1
       if accum >= args.grad_accum:
         scaler.step(opt); scaler.update(); opt.zero_grad(set_to_none=True)
         accum = 0; step += 1
       tr_lm += float(lm.detach()) * x.size(0); tr_v += float(v_loss.detach()) * x.size(0); tr_t += float(t_loss.detach()) * x.size(0)
       seen += x.size(0)
+
     # val
     model.train(False)
     va_lm = va_v = va_t = 0.0; vseen = 0
     with torch.no_grad():
       for batch in tqdm(val_ld, desc=f"valid e{ep}/{args.epochs}", ncols=100, leave=False):
-        x = batch.x.to(device); y = batch.y_next.to(device)
-        v_tgt = batch.v_tgt.to(device); m = batch.mask.to(device)
-        t_tgt = batch.t_tgt.to(device) if (batch.t_tgt is not None) else None
+        x = batch.x.to(device, non_blocking=True); y = batch.y_next.to(device, non_blocking=True)
+        v_tgt = batch.v_tgt.to(device, non_blocking=True); m = batch.mask.to(device, non_blocking=True)
+        t_tgt = batch.t_tgt.to(device, non_blocking=True) if (batch.t_tgt is not None) else None
         logits, v, t = model(x)
         lm = ce(logits.view(-1, logits.size(-1)), y.view(-1))
         v_loss_full = mse(v, v_tgt); v_loss = (v_loss_full[m].mean()) if m.any() else torch.tensor(0.0, device=device)
@@ -488,19 +496,23 @@ def train_main(argv: Optional[Iterable[str]] = None) -> int:
           t_loss = torch.tensor(0.0, device=device)
         va_lm += float(lm) * x.size(0); va_v += float(v_loss) * x.size(0); va_t += float(t_loss) * x.size(0)
         vseen += x.size(0)
+
     tr_lm/=max(1,seen); tr_v/=max(1,seen); tr_t/=max(1,seen)
     va_lm/=max(1,vseen); va_v/=max(1,vseen); va_t/=max(1,vseen)
     va_tot = va_lm + args.lambda_value*va_v + args.lambda_think*va_t
     print(f"epoch {ep}: train lm {tr_lm:.3f} v {tr_v:.3f} t {tr_t:.3f} | val lm {va_lm:.3f} v {va_v:.3f} t {va_t:.3f} tot {va_tot:.3f}")
+
     # save + top-k
-    ckpt: dict[str, dict[str, Any]] = {"args": dataclasses.asdict(args) if (dataclasses := dc) else {}, "model_state": model.state_dict(), "vocab": tok.stoi}
+    ckpt: dict[str, dict[str, Any]] = {"args": dc.asdict(args), "model_state": model.state_dict(), "vocab": tok.stoi}
     path = os.path.join(args.out_dir, f"ep{ep:02d}.pt"); torch.save(ckpt, path)
     topk.append((va_tot, path)); topk.sort(key=lambda x: x[0])
-    for i, (_, p) in enumerate(topk[: args.topk]):
+    for i, (_, pth) in enumerate(topk[: args.topk]):
       tgt = os.path.join(args.out_dir, f"top{i+1}.pt")
-      if os.path.abspath(p) != os.path.abspath(tgt):
-        try: torch.save(torch.load(p, map_location="cpu"), tgt)
-        except Exception: pass
+      if os.path.abspath(pth) != os.path.abspath(tgt):
+        try:
+          torch.save(torch.load(pth, map_location="cpu"), tgt)
+        except Exception:
+          pass
     if va_tot <= min(x for x,_ in topk[: args.topk]):
       torch.save(ckpt, os.path.join(args.out_dir, "best.pt"))
   return 0
@@ -522,17 +534,14 @@ class LMHiveAgent:
     self.use_mcts = use_mcts; self.temperature = temperature
     self.mcts = MCTS(model, tok, MCTSConf(n=mcts_n), device) if use_mcts else None
     self.resign_thresh = resign_thresh
-
   def select(self, env: HiveEnv, gamestring: str) -> str:
-    # resignation rule
     x = torch.tensor([[self.tok.bos_id]], dtype=torch.long, device=self.device)
     with torch.no_grad():
       _, v, _ = self.model(x)
     if float(v[0,-1].item()) < self.resign_thresh:
-      return "pass"  # no explicit resign move in UHP; choose no-op here
+      return "pass"
     if self.use_mcts and self.mcts is not None:
       return self.mcts.select_move(env, gamestring, self.temperature)
-    # masked sampling
     env.reset(gamestring)
     legals = env.legal_moves(); legal_ids = [self.tok.stoi.get(m, self.tok.unk_id) for m in legals]
     with torch.no_grad():
@@ -542,7 +551,6 @@ class LMHiveAgent:
       choice = torch.multinomial(probs, 1).item()
       return self.tok.itos.get(legal_ids[choice], "<unk>")
 
-# Simple eval loop
 class RandomAgent:
   def move(self, env: HiveEnv) -> str:
     return random.choice(env.legal_moves())
@@ -552,7 +560,7 @@ class NegamaxAgent:
     self.time = movetime_s
     self._brain = AlphaBetaPruner()
   def move(self, env: HiveEnv) -> str:
-    b = Board(str(env.b))  # copy via gamestring
+    b = Board(str(env.b))
     mv = self._brain.find_best_move(b, Engine.DEFAULT_MAX_BRANCHING_FACTOR, time_limit=self.time)
     return mv if mv in env.legal_moves() else random.choice(env.legal_moves())
 
@@ -568,8 +576,7 @@ class EvalResult:
   win: int; loss: int; draw: int; avg_len: float
 
 def play_match(agent_w: Any, agent_b: Any, max_plies: int = 300) -> tuple[str, int]:
-  env = HiveEnv()
-  env.reset("")
+  env = HiveEnv(); env.reset("")
   plies = 0
   for ply in range(max_plies):
     if env.is_over():
@@ -583,21 +590,15 @@ def play_match(agent_w: Any, agent_b: Any, max_plies: int = 300) -> tuple[str, i
 def eval_model(ckpt: str, vs: str = "random", conf: EvalConf = EvalConf()) -> EvalResult:
   model, tok, dev = load_model(ckpt)
   lm_agent = LMHiveAgent(model, tok, dev, use_mcts=(conf.mcts_n>0), mcts_n=conf.mcts_n, temperature=conf.temperature)
-  if vs == "random":
-    opp = RandomAgent()
-  else:
-    opp = NegamaxAgent(conf.negamax_time)
-  W = L = D = 0
-  total_len=0
+  opp = RandomAgent() if vs == "random" else NegamaxAgent(conf.negamax_time)
+  W = L = D = 0; total_len = 0
   for g in tqdm(range(conf.games), desc="eval", ncols=100):
     aw, ab = (lm_agent, opp) if g % 2==0 else (opp, lm_agent)
     res, length = play_match(aw, ab)
     if res == "W":
-      W += 1 if g % 2==0 else 0
-      L += 0 if g % 2==0 else 1
+      W += 1 if g % 2==0 else 0; L += 0 if g % 2==0 else 1
     elif res == "B":
-      L += 1 if g % 2==0 else 0
-      W += 0 if g % 2==0 else 1
+      L += 1 if g % 2==0 else 0; W += 0 if g % 2==0 else 1
     else:
       D += 1
     total_len += length
@@ -612,7 +613,6 @@ class UpscaleArgs:
   mcts_n: int
   temperature: float
 
-
 def upscale_main(argv: Optional[Iterable[str]] = None) -> int:
   p = argparse.ArgumentParser(description="Guided data upscaling with current model")
   p.add_argument("--ckpt", required=True)
@@ -624,34 +624,33 @@ def upscale_main(argv: Optional[Iterable[str]] = None) -> int:
   model, tok, dev = load_model(a.ckpt)
   agent = LMHiveAgent(model, tok, dev, use_mcts=(a.mcts_n>0), mcts_n=a.mcts_n, temperature=a.temperature)
   env = HiveEnv()
-  # write JSONL(.gz)
   out = a.out; os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
   fh: io.TextIOBase = io.TextIOWrapper(gzip.open(out, "wb"), encoding="utf-8") if out.endswith(".gz") else open(out, "w", encoding="utf-8")
-  for _g in tqdm(range(a.games), desc="upscale", ncols=100):
+  for g in tqdm(range(a.games), desc="upscale", ncols=100):
     env.reset("")
     moves: list[str] = []
-    for _ply in range(300):
+    for _ in range(300):
       if env.is_over(): break
       mv = agent.select(env, str(env.b))
       env.play(mv); moves.append(mv)
-    rec: dict[str, list[str] | str | int | dict[str, str] | None] = {"moves": moves, "result": env.result(), "ply_count": len(moves), "meta": {"source": "upscale"}}
+    rec: dict[str, Any] = {"moves": moves, "result": env.result(), "ply_count": len(moves), "meta": {"source": "upscale"}}
     fh.write(json.dumps(rec) + "\n")
   fh.close()
   return 0
 
 # ------------------------------ CLI glue --------------------------------
 if __name__ == "__main__":
-  ap = argparse.ArgumentParser(description="Day3–7 Stack")
+  ap = argparse.ArgumentParser(description="Day3–7 Stack (optimized)")
   sub = ap.add_subparsers(dest="cmd", required=True)
 
   tr = sub.add_parser("train", help="train the model")
-  # reuse TrainArgs
+  # flags mirror TrainArgs
   for flag, typ, default in [
     ("--data", str, None), ("--out-dir", str, "runs/day3"), ("--ctx", int, 256), ("--d", int, 512), ("--L", int, 8),
     ("--heads", int, 8), ("--mlp", int, 2048), ("--batch-size", int, 64), ("--lr", float, 3e-4), ("--wd", float, 0.1),
     ("--epochs", int, 3), ("--lambda-value", float, 0.25), ("--lambda-think", float, 0.0), ("--seed", int, 42),
     ("--min-count", int, 1), ("--vocab", str, ""), ("--device", str, "auto"), ("--warmup-steps", int, 500),
-    ("--grad-accum", int, 1), ("--topk", int, 3)
+    ("--grad-accum", int, 1), ("--topk", int, 3), ("--num-workers", int, max(2, (os.cpu_count() or 8)//2)), ("--compile", int, 0)
   ]:
     if flag == "--data":
       tr.add_argument(flag, nargs="+", required=True)
@@ -680,9 +679,8 @@ if __name__ == "__main__":
   up.add_argument("--temperature", type=float, default=1.0)
 
   ns = ap.parse_args()
-
   if ns.cmd == "train":
-    train_argv: list[str] = [
+    argv: list[str] = [
       "--data", *ns.data,
       "--out-dir", ns.out_dir,
       "--ctx", str(ns.ctx),
@@ -703,25 +701,18 @@ if __name__ == "__main__":
       "--warmup-steps", str(ns.warmup_steps),
       "--grad-accum", str(ns.grad_accum),
       "--topk", str(ns.topk),
+      "--num-workers", str(ns.num_workers),
+      "--compile", str(ns.compile),
     ]
-    raise SystemExit(train_main(train_argv))
-
+    raise SystemExit(train_main(argv))
   elif ns.cmd == "play":
     model, tok, dev = load_model(ns.ckpt)
     env = HiveEnv()
-    agent = LMHiveAgent(model, tok, dev, use_mcts=(ns.mcts_n > 0), mcts_n=ns.mcts_n, temperature=ns.temperature)
+    agent = LMHiveAgent(model, tok, dev, use_mcts=(ns.mcts_n>0), mcts_n=ns.mcts_n, temperature=ns.temperature)
     mv = agent.select(env, ns.gamestring)
     print(mv)
-
   elif ns.cmd == "eval":
-    r = eval_model(ns.ckpt, vs=ns.vs,
-                   conf=EvalConf(games=ns.games, mcts_n=ns.mcts_n,
-                                 temperature=ns.temperature, negamax_time=ns.negamax_time))
+    r = eval_model(ns.ckpt, vs=ns.vs, conf=EvalConf(games=ns.games, mcts_n=ns.mcts_n, temperature=ns.temperature, negamax_time=ns.negamax_time))
     print(json.dumps(dc.asdict(r)))
-
   elif ns.cmd == "upscale":
-    raise SystemExit(upscale_main([
-      "--ckpt", ns.ckpt, "--out", ns.out,
-      "--games", str(ns.games), "--mcts-n", str(ns.mcts_n),
-      "--temperature", str(ns.temperature),
-    ]))
+    raise SystemExit(upscale_main(["--ckpt", ns.ckpt, "--out", ns.out, "--games", str(ns.games), "--mcts-n", str(ns.mcts_n), "--temperature", str(ns.temperature)]))
