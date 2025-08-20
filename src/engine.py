@@ -6,6 +6,8 @@ from core.enums import Command, Option, OptionType, Strategy, PlayerColor
 from core.board import Board
 from core.game import Move
 from ai.brain import Brain, Random, AlphaBetaPruner, AlphaBetaPrunerSimple
+import sys
+import select
 
 class Engine:
   """
@@ -93,7 +95,17 @@ class Engine:
     self.info()
     while True:
       print("ok")
-      match input().strip().split():
+      line=""
+      if sys.stdin.isatty():
+        line = input().strip().split()
+      else:
+        ready, _, _ = select.select([sys.stdin], [], [], None)  # aspetta all'infinito
+        if ready:
+          line=sys.stdin.readline()
+          if(line==""):
+            break
+          line=line.strip().split()
+      match line:
         case [Command.INFO]:
           self.info()
         case [Command.HELP, *arguments]:
